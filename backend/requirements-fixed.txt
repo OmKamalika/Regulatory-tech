@@ -1,0 +1,65 @@
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+websockets==12.0
+
+# Database
+sqlalchemy==2.0.25
+alembic==1.13.1
+psycopg2-binary==2.9.9
+
+# Task Queue
+celery==5.3.6
+redis==5.0.1
+
+# Object Storage
+minio==7.2.3
+
+# LangChain & AI Orchestration
+langchain==0.1.6
+langchain-community==0.0.17
+langgraph==0.0.20
+
+# Open Source AI/ML Models (FIXED VERSIONS)
+openai-whisper  # Latest version, no build issues
+sentence-transformers
+transformers
+torch
+torchvision
+ultralytics
+easyocr
+
+# Additional ML dependencies
+accelerate
+pillow
+
+# Video/Image Processing
+opencv-python
+ffmpeg-python
+scenedetect
+
+# Document Processing
+PyPDF2
+pdfplumber
+python-docx
+
+# Vector Database
+weaviate-client
+
+# Utilities
+python-dotenv
+pydantic
+pydantic-settings
+httpx
+
+# Testing
+pytest
+pytest-asyncio
+pytest-cov
+pytest-mock
+
+# Development
+black
+flake8
+mypy

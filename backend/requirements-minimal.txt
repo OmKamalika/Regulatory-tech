@@ -1,0 +1,51 @@
+# Core Web Framework
+fastapi
+uvicorn[standard]
+python-multipart
+websockets
+
+# Database
+sqlalchemy
+alembic
+psycopg2-binary
+
+# Task Queue
+celery
+redis
+
+# Object Storage
+minio
+
+# LangChain (let pip resolve compatible versions)
+langchain
+langchain-community
+langgraph
+
+# AI/ML Models
+openai-whisper
+sentence-transformers
+transformers
+torch
+torchvision
+ultralytics
+easyocr
+
+# Additional dependencies
+accelerate
+pillow
+opencv-python
+ffmpeg-python
+scenedetect
+PyPDF2
+pdfplumber
+python-docx
+weaviate-client
+python-dotenv
+pydantic
+pydantic-settings
+httpx
+
+# Testing & Dev
+pytest
+pytest-asyncio
+black

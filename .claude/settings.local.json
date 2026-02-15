@@ -3,7 +3,18 @@
     "allow": [
       "Bash(claude-code auth:*)",
       "Bash(dir:*)",
-      "WebFetch(domain:docs.google.com)"
+      "WebFetch(domain:docs.google.com)",
+      "Bash(backend/app/models/__init__.py << 'EOF'\n\"\"\"\nDatabase models package.\n\"\"\"\nfrom app.models.video import Video, VideoStatus\nfrom app.models.guideline import Guideline, GuidelineSeverity\nfrom app.models.compliance_report import \\(\n    ComplianceReport,\n    ComplianceFinding,\n    ComplianceStatus,\n    ViolationSeverity,\n\\)\nfrom app.models.frame_analysis import FrameAnalysis\nfrom app.models.transcription import TranscriptionSegment\n\n__all__ = [\n    \"Video\",\n    \"VideoStatus\",\n    \"Guideline\",\n    \"GuidelineSeverity\",\n    \"ComplianceReport\",\n    \"ComplianceFinding\",\n    \"ComplianceStatus\",\n    \"ViolationSeverity\",\n    \"FrameAnalysis\",\n    \"TranscriptionSegment\",\n]\nEOF)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(test:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(tesseract:*)",
+      "Bash(choco install:*)",
+      "Bash(find:*)",
+      "Bash(winget install:*)",
+      "Bash(\"C:\\\\Program Files\\\\Tesseract-OCR\\\\tesseract.exe\":*)",
+      "Bash(findstr:*)"
     ]
   }
 }

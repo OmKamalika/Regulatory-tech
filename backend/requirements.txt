@@ -1,0 +1,66 @@
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+websockets==12.0
+
+# Database
+sqlalchemy==2.0.25
+alembic==1.13.1
+psycopg2-binary==2.9.9
+
+# Task Queue
+celery==5.3.6
+redis==5.0.1
+
+# Object Storage
+minio==7.2.3
+
+# LangChain & AI Orchestration
+langchain==0.1.6
+langchain-community==0.0.17
+langgraph==0.0.20
+
+# Open Source AI/ML Models
+openai-whisper==20231117  # Local audio transcription
+sentence-transformers==2.3.1  # Text embeddings
+transformers==4.36.2  # HuggingFace transformers for LLaVA/BLIP-2
+torch==2.1.2  # PyTorch (CPU version, change to torch with CUDA for GPU)
+torchvision==0.16.2
+ultralytics==8.1.9  # YOLO v8 for object detection
+easyocr==1.7.0  # OCR
+
+# Additional ML dependencies
+accelerate==0.26.1  # For model loading
+bitsandbytes==0.42.0  # For quantization (optional)
+pillow==10.2.0
+
+# Video/Image Processing
+opencv-python==4.9.0.80
+ffmpeg-python==0.2.0
+scenedetect==0.6.2  # Scene change detection
+
+# Document Processing
+PyPDF2==3.0.1
+pdfplumber==0.10.3
+python-docx==1.1.0
+
+# Vector Database
+weaviate-client==4.4.0
+
+# Utilities
+python-dotenv==1.0.1
+pydantic==2.6.0
+pydantic-settings==2.1.0
+httpx==0.26.0  # For async HTTP requests
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+
+# Development
+black==24.1.1
+flake8==7.0.0
+mypy==1.8.0

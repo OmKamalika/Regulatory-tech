@@ -1,0 +1,740 @@
+2026-02-15 20:15:43,380 - app.services.vector_store - INFO - Connecting to Weaviate at http://localhost:8080
+2026-02-15 20:15:43,726 - httpx - INFO - HTTP Request: GET http://localhost:8080/v1/.well-known/openid-configuration "HTTP/1.1 404 Not Found"
+2026-02-15 20:15:44,055 - httpx - INFO - HTTP Request: GET http://localhost:8080/v1/meta "HTTP/1.1 200 OK"
+2026-02-15 20:15:44,530 - httpx - INFO - HTTP Request: GET https://pypi.org/pypi/weaviate-client/json "HTTP/1.1 200 OK"
+2026-02-15 20:15:44,581 - app.services.vector_store - INFO - Connected to Weaviate successfully
+2026-02-15 20:15:44,583 - httpx - INFO - HTTP Request: GET http://localhost:8080/v1/schema/VideoContent "HTTP/1.1 200 OK"
+2026-02-15 20:15:44,585 - httpx - INFO - HTTP Request: GET http://localhost:8080/v1/schema/Guidelines "HTTP/1.1 200 OK"
+2026-02-15 20:15:44,598 - __main__ - INFO - Retrieved 200 frames from vector database
+2026-02-15 20:15:44,598 - __main__ - INFO - Analyzing 200 frames for PII
+2026-02-15 20:15:44,598 - __main__ - INFO - Looking for frames around 7-11 seconds (where phone was found):
+2026-02-15 20:15:44,598 - __main__ - INFO -   [10.88s]: At timestamp 10.88 seconds (frame 770):
+2026-02-15 20:15:44,598 - __main__ - INFO -   [8.90s]: At timestamp 8.90 seconds (frame 630):
+2026-02-15 20:15:44,598 - __main__ - INFO -   [9.89s]: At timestamp 9.89 seconds (frame 700):
+2026-02-15 20:15:44,598 - __main__ - INFO -   [7.91s]: At timestamp 7.91 seconds (frame 560):
+2026-02-15 20:15:44,598 - __main__ - INFO -   [7.91s]: At timestamp 7.91 seconds (frame 560):
+2026-02-15 20:15:44,598 - __main__ - INFO -   [9.89s]: At timestamp 9.89 seconds (frame 700):
+2026-02-15 20:15:44,598 - __main__ - INFO -   [8.90s]: At timestamp 8.90 seconds (frame 630):
+2026-02-15 20:15:44,598 - __main__ - INFO -   [10.88s]: At timestamp 10.88 seconds (frame 770):
+2026-02-15 20:15:44,598 - __main__ - INFO -   [10.88s]: At timestamp 10.88 seconds (frame 770):
+2026-02-15 20:15:44,598 - __main__ - INFO -   [7.91s]: At timestamp 7.91 seconds (frame 560):
+
+================================================================
+        PII EXTRACTION FROM VIDEO - STEP 1 COMPLETE
+================================================================
+    
+[VIDEO] Extracting PII from video: test_video_001
+[...] Searching through all processed frames...
+
+
+======================================================================
+  PII EXTRACTION REPORT
+======================================================================
+
+Video ID: test_video_001
+
+[WARNING] Total PII Types Detected: 1
+Total PII Instances: 292
+
+----------------------------------------------------------------------
+  PII SUMMARY BY TYPE
+----------------------------------------------------------------------
+
+>> PHONE INTL
+   Count: 292
+
+   Value: 10.88
+   Occurrences: 4
+   Timestamps: 10.88s, 10.88s, 10.88s, 10.88s
+
+   Value: 15.82
+   Occurrences: 4
+   Timestamps: 15.82s, 15.82s, 15.82s, 15.82s
+
+   Value: 1120
+   Occurrences: 4
+   Timestamps: 15.82s, 15.82s, 15.82s, 15.82s
+
+   Value: 3360
+   Occurrences: 4
+   Timestamps: 47.46s, 47.46s, 47.46s, 47.46s
+
+   Value: 47.46
+   Occurrences: 4
+   Timestamps: 47.46s, 47.46s, 47.46s, 47.46s
+
+   Value: 22.74
+   Occurrences: 4
+   Timestamps: 22.74s, 22.74s, 22.74s, 22.74s
+
+   Value: 1610
+   Occurrences: 4
+   Timestamps: 22.74s, 22.74s, 22.74s, 22.74s
+
+   Value: 13.84
+   Occurrences: 4
+   Timestamps: 13.84s, 13.84s, 13.84s, 13.84s
+
+   Value: 13.18
+   Occurrences: 4
+   Timestamps: 13.18s, 13.18s, 13.18s, 13.18s
+
+   Value: 11.86
+   Occurrences: 4
+   Timestamps: 11.86s, 11.86s, 11.86s, 11.86s
+
+   Value: 1330
+   Occurrences: 4
+   Timestamps: 18.78s, 18.78s, 18.78s, 18.78s
+
+   Value: 18.78
+   Occurrences: 4
+   Timestamps: 18.78s, 18.78s, 18.78s, 18.78s
+
+   Value: 16.81
+   Occurrences: 4
+   Timestamps: 16.81s, 16.81s, 16.81s, 16.81s
+
+   Value: 1190
+   Occurrences: 4
+   Timestamps: 16.81s, 16.81s, 16.81s, 16.81s
+
+   Value: 17.80
+   Occurrences: 4
+   Timestamps: 17.80s, 17.80s, 17.80s, 17.80s
+
+   Value: 1260
+   Occurrences: 4
+   Timestamps: 17.80s, 17.80s, 17.80s, 17.80s
+
+   Value: 1050
+   Occurrences: 4
+   Timestamps: 14.83s, 14.83s, 14.83s, 14.83s
+
+   Value: 14.83
+   Occurrences: 4
+   Timestamps: 14.83s, 14.83s, 14.83s, 14.83s
+
+   Value: 20.76
+   Occurrences: 4
+   Timestamps: 20.76s, 20.76s, 20.76s, 20.76s
+
+   Value: 1470
+   Occurrences: 4
+   Timestamps: 20.76s, 20.76s, 20.76s, 20.76s
+
+   Value: 19.77
+   Occurrences: 4
+   Timestamps: 19.77s, 19.77s, 19.77s, 19.77s
+
+   Value: 1400
+   Occurrences: 4
+   Timestamps: 19.77s, 19.77s, 19.77s, 19.77s
+
+   Value: 12.85
+   Occurrences: 4
+   Timestamps: 12.85s, 12.85s, 12.85s, 12.85s
+
+   Value: 21.75
+   Occurrences: 4
+   Timestamps: 21.75s, 21.75s, 21.75s, 21.75s
+
+   Value: 1540
+   Occurrences: 4
+   Timestamps: 21.75s, 21.75s, 21.75s, 21.75s
+
+   Value: 34.60
+   Occurrences: 4
+   Timestamps: 34.60s, 34.60s, 34.60s, 34.60s
+
+   Value: 2450
+   Occurrences: 4
+   Timestamps: 34.60s, 34.60s, 34.60s, 34.60s
+
+   Value: 40.54
+   Occurrences: 4
+   Timestamps: 40.54s, 40.54s, 40.54s, 40.54s
+
+   Value: 2870
+   Occurrences: 4
+   Timestamps: 40.54s, 40.54s, 40.54s, 40.54s
+
+   Value: 23.73
+   Occurrences: 4
+   Timestamps: 23.73s, 23.73s, 23.73s, 23.73s
+
+   Value: 1680
+   Occurrences: 4
+   Timestamps: 23.73s, 23.73s, 23.73s, 23.73s
+
+   Value: 35.59
+   Occurrences: 4
+   Timestamps: 35.59s, 35.59s, 35.59s, 35.59s
+
+   Value: 2520
+   Occurrences: 4
+   Timestamps: 35.59s, 35.59s, 35.59s, 35.59s
+
+   Value: 2590
+   Occurrences: 4
+   Timestamps: 36.58s, 36.58s, 36.58s, 36.58s
+
+   Value: 36.58
+   Occurrences: 4
+   Timestamps: 36.58s, 36.58s, 36.58s, 36.58s
+
+   Value: 1750
+   Occurrences: 4
+   Timestamps: 24.72s, 24.72s, 24.72s, 24.72s
+
+   Value: 24.72
+   Occurrences: 4
+   Timestamps: 24.72s, 24.72s, 24.72s, 24.72s
+
+   Value: 25.71
+   Occurrences: 4
+   Timestamps: 25.71s, 25.71s, 25.71s, 25.71s
+
+   Value: 1820
+   Occurrences: 4
+   Timestamps: 25.71s, 25.71s, 25.71s, 25.71s
+
+   Value: 2660
+   Occurrences: 4
+   Timestamps: 37.57s, 37.57s, 37.57s, 37.57s
+
+   Value: 37.57
+   Occurrences: 4
+   Timestamps: 37.57s, 37.57s, 37.57s, 37.57s
+
+   Value: 38.56
+   Occurrences: 4
+   Timestamps: 38.56s, 38.56s, 38.56s, 38.56s
+
+   Value: 2730
+   Occurrences: 4
+   Timestamps: 38.56s, 38.56s, 38.56s, 38.56s
+
+   Value: 26.69
+   Occurrences: 4
+   Timestamps: 26.69s, 26.69s, 26.69s, 26.69s
+
+   Value: 1890
+   Occurrences: 4
+   Timestamps: 26.69s, 26.69s, 26.69s, 26.69s
+
+   Value: 39.55
+   Occurrences: 4
+   Timestamps: 39.55s, 39.55s, 39.55s, 39.55s
+
+   Value: 2800
+   Occurrences: 4
+   Timestamps: 39.55s, 39.55s, 39.55s, 39.55s
+
+   Value: 1960
+   Occurrences: 4
+   Timestamps: 27.68s, 27.68s, 27.68s, 27.68s
+
+   Value: 27.68
+   Occurrences: 4
+   Timestamps: 27.68s, 27.68s, 27.68s, 27.68s
+
+   Value: 28.67
+   Occurrences: 4
+   Timestamps: 28.67s, 28.67s, 28.67s, 28.67s
+
+   Value: 2030
+   Occurrences: 4
+   Timestamps: 28.67s, 28.67s, 28.67s, 28.67s
+
+   Value: 2240
+   Occurrences: 4
+   Timestamps: 31.64s, 31.64s, 31.64s, 31.64s
+
+   Value: 31.64
+   Occurrences: 4
+   Timestamps: 31.64s, 31.64s, 31.64s, 31.64s
+
+   Value: 2310
+   Occurrences: 4
+   Timestamps: 32.63s, 32.63s, 32.63s, 32.63s
+
+   Value: 32.63
+   Occurrences: 4
+   Timestamps: 32.63s, 32.63s, 32.63s, 32.63s
+
+   Value: 33.61
+   Occurrences: 4
+   Timestamps: 33.61s, 33.61s, 33.61s, 33.61s
+
+   Value: 2380
+   Occurrences: 4
+   Timestamps: 33.61s, 33.61s, 33.61s, 33.61s
+
+   Value: 30.65
+   Occurrences: 4
+   Timestamps: 30.65s, 30.65s, 30.65s, 30.65s
+
+   Value: 2170
+   Occurrences: 4
+   Timestamps: 30.65s, 30.65s, 30.65s, 30.65s
+
+   Value: 2100
+   Occurrences: 4
+   Timestamps: 29.66s, 29.66s, 29.66s, 29.66s
+
+   Value: 29.66
+   Occurrences: 4
+   Timestamps: 29.66s, 29.66s, 29.66s, 29.66s
+
+   Value: 3010
+   Occurrences: 4
+   Timestamps: 42.51s, 42.51s, 42.51s, 42.51s
+
+   Value: 42.51
+   Occurrences: 4
+   Timestamps: 42.51s, 42.51s, 42.51s, 42.51s
+
+   Value: 3220
+   Occurrences: 4
+   Timestamps: 45.48s, 45.48s, 45.48s, 45.48s
+
+   Value: 45.48
+   Occurrences: 4
+   Timestamps: 45.48s, 45.48s, 45.48s, 45.48s
+
+   Value: 41.52
+   Occurrences: 4
+   Timestamps: 41.52s, 41.52s, 41.52s, 41.52s
+
+   Value: 2940
+   Occurrences: 4
+   Timestamps: 41.52s, 41.52s, 41.52s, 41.52s
+
+   Value: 44.49
+   Occurrences: 4
+   Timestamps: 44.49s, 44.49s, 44.49s, 44.49s
+
+   Value: 3150
+   Occurrences: 4
+   Timestamps: 44.49s, 44.49s, 44.49s, 44.49s
+
+   Value: 3080
+   Occurrences: 4
+   Timestamps: 43.50s, 43.50s, 43.50s, 43.50s
+
+   Value: 43.50
+   Occurrences: 4
+   Timestamps: 43.50s, 43.50s, 43.50s, 43.50s
+
+   Value: 46.47
+   Occurrences: 4
+   Timestamps: 46.47s, 46.47s, 46.47s, 46.47s
+
+   Value: 3290
+   Occurrences: 4
+   Timestamps: 46.47s, 46.47s, 46.47s, 46.47s
+
+----------------------------------------------------------------------
+  CHRONOLOGICAL TIMELINE
+----------------------------------------------------------------------
+
+[10.88s] (Frame 770)
+   - Phone Intl: 10.88
+   - Phone Intl: 10.88
+   - Phone Intl: 10.88
+   - Phone Intl: 10.88
+
+[11.86s] (Frame 840)
+   - Phone Intl: 11.86
+   - Phone Intl: 11.86
+   - Phone Intl: 11.86
+   - Phone Intl: 11.86
+
+[12.85s] (Frame 910)
+   - Phone Intl: 12.85
+   - Phone Intl: 12.85
+   - Phone Intl: 12.85
+   - Phone Intl: 12.85
+
+[13.18s] (Frame 933)
+   - Phone Intl: 13.18
+   - Phone Intl: 13.18
+   - Phone Intl: 13.18
+   - Phone Intl: 13.18
+
+[13.84s] (Frame 980)
+   - Phone Intl: 13.84
+   - Phone Intl: 13.84
+   - Phone Intl: 13.84
+   - Phone Intl: 13.84
+
+[14.83s] (Frame 1050)
+   - Phone Intl: 1050
+   - Phone Intl: 14.83
+   - Phone Intl: 1050
+   - Phone Intl: 14.83
+   - Phone Intl: 1050
+   - Phone Intl: 14.83
+   - Phone Intl: 1050
+   - Phone Intl: 14.83
+
+[15.82s] (Frame 1120)
+   - Phone Intl: 15.82
+   - Phone Intl: 1120
+   - Phone Intl: 15.82
+   - Phone Intl: 1120
+   - Phone Intl: 15.82
+   - Phone Intl: 1120
+   - Phone Intl: 15.82
+   - Phone Intl: 1120
+
+[16.81s] (Frame 1190)
+   - Phone Intl: 16.81
+   - Phone Intl: 1190C:\Users\mailt\AppData\Local\Programs\Python\Python313\Lib\site-packages\weaviate\warnings.py:302: ResourceWarning: Con004: The connection to Weaviate was not closed properly. This can lead to memory leaks.
+            Please make sure to close the connection using `client.close()`.
+  warnings.warn(
+
+   - Phone Intl: 16.81
+   - Phone Intl: 1190
+   - Phone Intl: 16.81
+   - Phone Intl: 1190
+   - Phone Intl: 16.81
+   - Phone Intl: 1190
+
+[17.80s] (Frame 1260)
+   - Phone Intl: 17.80
+   - Phone Intl: 1260
+   - Phone Intl: 17.80
+   - Phone Intl: 1260
+   - Phone Intl: 17.80
+   - Phone Intl: 1260
+   - Phone Intl: 17.80
+   - Phone Intl: 1260
+
+[18.78s] (Frame 1330)
+   - Phone Intl: 1330
+   - Phone Intl: 18.78
+   - Phone Intl: 1330
+   - Phone Intl: 18.78
+   - Phone Intl: 1330
+   - Phone Intl: 18.78
+   - Phone Intl: 1330
+   - Phone Intl: 18.78
+
+[19.77s] (Frame 1400)
+   - Phone Intl: 19.77
+   - Phone Intl: 1400
+   - Phone Intl: 19.77
+   - Phone Intl: 1400
+   - Phone Intl: 19.77
+   - Phone Intl: 1400
+   - Phone Intl: 19.77
+   - Phone Intl: 1400
+
+[20.76s] (Frame 1470)
+   - Phone Intl: 20.76
+   - Phone Intl: 1470
+   - Phone Intl: 20.76
+   - Phone Intl: 1470
+   - Phone Intl: 20.76
+   - Phone Intl: 1470
+   - Phone Intl: 20.76
+   - Phone Intl: 1470
+
+[21.75s] (Frame 1540)
+   - Phone Intl: 21.75
+   - Phone Intl: 1540
+   - Phone Intl: 21.75
+   - Phone Intl: 1540
+   - Phone Intl: 21.75
+   - Phone Intl: 1540
+   - Phone Intl: 21.75
+   - Phone Intl: 1540
+
+[22.74s] (Frame 1610)
+   - Phone Intl: 22.74
+   - Phone Intl: 1610
+   - Phone Intl: 22.74
+   - Phone Intl: 1610
+   - Phone Intl: 22.74
+   - Phone Intl: 1610
+   - Phone Intl: 22.74
+   - Phone Intl: 1610
+
+[23.73s] (Frame 1680)
+   - Phone Intl: 23.73
+   - Phone Intl: 1680
+   - Phone Intl: 23.73
+   - Phone Intl: 1680
+   - Phone Intl: 23.73
+   - Phone Intl: 1680
+   - Phone Intl: 23.73
+   - Phone Intl: 1680
+
+[24.72s] (Frame 1750)
+   - Phone Intl: 1750
+   - Phone Intl: 24.72
+   - Phone Intl: 1750
+   - Phone Intl: 24.72
+   - Phone Intl: 1750
+   - Phone Intl: 24.72
+   - Phone Intl: 1750
+   - Phone Intl: 24.72
+
+[25.71s] (Frame 1820)
+   - Phone Intl: 25.71
+   - Phone Intl: 1820
+   - Phone Intl: 25.71
+   - Phone Intl: 1820
+   - Phone Intl: 25.71
+   - Phone Intl: 1820
+   - Phone Intl: 25.71
+   - Phone Intl: 1820
+
+[26.69s] (Frame 1890)
+   - Phone Intl: 26.69
+   - Phone Intl: 1890
+   - Phone Intl: 26.69
+   - Phone Intl: 1890
+   - Phone Intl: 26.69
+   - Phone Intl: 1890
+   - Phone Intl: 26.69
+   - Phone Intl: 1890
+
+[27.68s] (Frame 1960)
+   - Phone Intl: 1960
+   - Phone Intl: 27.68
+   - Phone Intl: 1960
+   - Phone Intl: 27.68
+   - Phone Intl: 1960
+   - Phone Intl: 27.68
+   - Phone Intl: 1960
+   - Phone Intl: 27.68
+
+[28.67s] (Frame 2030)
+   - Phone Intl: 28.67
+   - Phone Intl: 2030
+   - Phone Intl: 28.67
+   - Phone Intl: 2030
+   - Phone Intl: 28.67
+   - Phone Intl: 2030
+   - Phone Intl: 28.67
+   - Phone Intl: 2030
+
+[29.66s] (Frame 2100)
+   - Phone Intl: 2100
+   - Phone Intl: 29.66
+   - Phone Intl: 2100
+   - Phone Intl: 29.66
+   - Phone Intl: 2100
+   - Phone Intl: 29.66
+   - Phone Intl: 2100
+   - Phone Intl: 29.66
+
+[30.65s] (Frame 2170)
+   - Phone Intl: 30.65
+   - Phone Intl: 2170
+   - Phone Intl: 30.65
+   - Phone Intl: 2170
+   - Phone Intl: 30.65
+   - Phone Intl: 2170
+   - Phone Intl: 30.65
+   - Phone Intl: 2170
+
+[31.64s] (Frame 2240)
+   - Phone Intl: 2240
+   - Phone Intl: 31.64
+   - Phone Intl: 2240
+   - Phone Intl: 31.64
+   - Phone Intl: 2240
+   - Phone Intl: 31.64
+   - Phone Intl: 2240
+   - Phone Intl: 31.64
+
+[32.63s] (Frame 2310)
+   - Phone Intl: 2310
+   - Phone Intl: 32.63
+   - Phone Intl: 2310
+   - Phone Intl: 32.63
+   - Phone Intl: 2310
+   - Phone Intl: 32.63
+   - Phone Intl: 2310
+   - Phone Intl: 32.63
+
+[33.61s] (Frame 2380)
+   - Phone Intl: 33.61
+   - Phone Intl: 2380
+   - Phone Intl: 33.61
+   - Phone Intl: 2380
+   - Phone Intl: 33.61
+   - Phone Intl: 2380
+   - Phone Intl: 33.61
+   - Phone Intl: 2380
+
+[34.60s] (Frame 2450)
+   - Phone Intl: 34.60
+   - Phone Intl: 2450
+   - Phone Intl: 34.60
+   - Phone Intl: 2450
+   - Phone Intl: 34.60
+   - Phone Intl: 2450
+   - Phone Intl: 34.60
+   - Phone Intl: 2450
+
+[35.59s] (Frame 2520)
+   - Phone Intl: 35.59
+   - Phone Intl: 2520
+   - Phone Intl: 35.59
+   - Phone Intl: 2520
+   - Phone Intl: 35.59
+   - Phone Intl: 2520
+   - Phone Intl: 35.59
+   - Phone Intl: 2520
+
+[36.58s] (Frame 2590)
+   - Phone Intl: 2590
+   - Phone Intl: 36.58
+   - Phone Intl: 2590
+   - Phone Intl: 36.58
+   - Phone Intl: 2590
+   - Phone Intl: 36.58
+   - Phone Intl: 2590
+   - Phone Intl: 36.58
+
+[37.57s] (Frame 2660)
+   - Phone Intl: 2660
+   - Phone Intl: 37.57
+   - Phone Intl: 2660
+   - Phone Intl: 37.57
+   - Phone Intl: 2660
+   - Phone Intl: 37.57
+   - Phone Intl: 2660
+   - Phone Intl: 37.57
+
+[38.56s] (Frame 2730)
+   - Phone Intl: 38.56
+   - Phone Intl: 2730
+   - Phone Intl: 38.56
+   - Phone Intl: 2730
+   - Phone Intl: 38.56
+   - Phone Intl: 2730
+   - Phone Intl: 38.56
+   - Phone Intl: 2730
+
+[39.55s] (Frame 2800)
+   - Phone Intl: 39.55
+   - Phone Intl: 2800
+   - Phone Intl: 39.55
+   - Phone Intl: 2800
+   - Phone Intl: 39.55
+   - Phone Intl: 2800
+   - Phone Intl: 39.55
+   - Phone Intl: 2800
+
+[40.54s] (Frame 2870)
+   - Phone Intl: 40.54
+   - Phone Intl: 2870
+   - Phone Intl: 40.54
+   - Phone Intl: 2870
+   - Phone Intl: 40.54
+   - Phone Intl: 2870
+   - Phone Intl: 40.54
+   - Phone Intl: 2870
+
+[41.52s] (Frame 2940)
+   - Phone Intl: 41.52
+   - Phone Intl: 2940
+   - Phone Intl: 41.52
+   - Phone Intl: 2940
+   - Phone Intl: 41.52
+   - Phone Intl: 2940
+   - Phone Intl: 41.52
+   - Phone Intl: 2940
+
+[42.51s] (Frame 3010)
+   - Phone Intl: 3010
+   - Phone Intl: 42.51
+   - Phone Intl: 3010
+   - Phone Intl: 42.51
+   - Phone Intl: 3010
+   - Phone Intl: 42.51
+   - Phone Intl: 3010
+   - Phone Intl: 42.51
+
+[43.50s] (Frame 3080)
+   - Phone Intl: 3080
+   - Phone Intl: 43.50
+   - Phone Intl: 3080
+   - Phone Intl: 43.50
+   - Phone Intl: 3080
+   - Phone Intl: 43.50
+   - Phone Intl: 3080
+   - Phone Intl: 43.50
+
+[44.49s] (Frame 3150)
+   - Phone Intl: 44.49
+   - Phone Intl: 3150
+   - Phone Intl: 44.49
+   - Phone Intl: 3150
+   - Phone Intl: 44.49
+   - Phone Intl: 3150
+   - Phone Intl: 44.49
+   - Phone Intl: 3150
+
+[45.48s] (Frame 3220)
+   - Phone Intl: 3220
+   - Phone Intl: 45.48
+   - Phone Intl: 3220
+   - Phone Intl: 45.48
+   - Phone Intl: 3220
+   - Phone Intl: 45.48
+   - Phone Intl: 3220
+   - Phone Intl: 45.48
+
+[46.47s] (Frame 3290)
+   - Phone Intl: 46.47
+   - Phone Intl: 3290
+   - Phone Intl: 46.47
+   - Phone Intl: 3290
+   - Phone Intl: 46.47
+   - Phone Intl: 3290
+   - Phone Intl: 46.47
+   - Phone Intl: 3290
+
+[47.46s] (Frame 3360)
+   - Phone Intl: 3360
+   - Phone Intl: 47.46
+   - Phone Intl: 3360
+   - Phone Intl: 47.46
+   - Phone Intl: 3360
+   - Phone Intl: 47.46
+   - Phone Intl: 3360
+   - Phone Intl: 47.46
+
+======================================================================
+  [!] PRIVACY COMPLIANCE WARNING
+======================================================================
+
+This video contains Personally Identifiable Information (PII).
+
+Recommended actions:
+1. Review DPDPA 2025 compliance requirements
+2. Ensure proper consent was obtained for data collection
+3. Implement data minimization practices
+4. Apply redaction/masking if necessary
+5. Maintain audit trail of PII access
+
+PII Types Detected:
+
+  * PHONE INTL
+
+======================================================================
+
+[OK] PII extraction complete!
+
+[TIP] This information will be used in STEP 3 for compliance checking
+      against DPDPA 2025 guidelines.
+
+<sys>:0: ResourceWarning: unclosed <socket.socket fd=644, family=23, type=1, proto=0, laddr=('::1', 58171, 0, 0), raddr=('::1', 8080, 0, 0)>
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
