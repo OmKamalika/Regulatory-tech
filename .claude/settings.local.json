@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(claude-code auth:*)",
+      "Bash(dir:*)",
+      "WebFetch(domain:docs.google.com)"
+    ]
+  }
+}
