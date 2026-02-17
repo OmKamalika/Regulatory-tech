@@ -46,13 +46,37 @@ class FrameExtractor:
         Args:
             video_path: Path to input video file
             output_dir: Directory to save extracted frames
-            max_frames: Maximum number of frames to extract (None = unlimited)
+            max_frames: Maximum number of frames to extract (None = unlimited).
+                        If provided, this is treated as a minimum — for longer
+                        videos, max_frames is auto-scaled to ensure at least
+                        1 frame per second of coverage.
 
         Returns:
             List of ExtractedFrame objects
         """
         os.makedirs(output_dir, exist_ok=True)
         logger.info(f"Extracting frames from {video_path}")
+
+        MAX_VIDEO_DURATION = 600  # 10 minutes cap
+
+        # Check video duration and auto-scale max_frames
+        cap = cv2.VideoCapture(video_path)
+        if cap.isOpened():
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            duration = total / fps if fps > 0 else 0
+            cap.release()
+
+            if duration > MAX_VIDEO_DURATION:
+                logger.warning(f"Video is {duration:.0f}s ({duration/60:.1f} min). Capping to {MAX_VIDEO_DURATION}s (10 min).")
+                duration = MAX_VIDEO_DURATION
+
+            # Ensure at least 1 frame per second of video
+            if max_frames is not None:
+                min_frames_needed = int(duration)
+                if min_frames_needed > max_frames:
+                    logger.info(f"Video is {duration:.0f}s long. Scaling max_frames from {max_frames} to {min_frames_needed} (1 fps coverage)")
+                    max_frames = min_frames_needed
 
         extracted_frames = []
 
@@ -153,10 +177,16 @@ class FrameExtractor:
             extracted_count = 0
             prev_frame = None
             scene_threshold = 30.0  # Scene change threshold
+            max_frame_count = int(original_fps * 600)  # 10-minute cap in frame count
 
             while True:
                 ret, frame = cap.read()
                 if not ret:
+                    break
+
+                # Stop at 10-minute cap
+                if frame_count >= max_frame_count:
+                    logger.info(f"Reached 10-minute cap at frame {frame_count}")
                     break
 
                 is_scene_change = False

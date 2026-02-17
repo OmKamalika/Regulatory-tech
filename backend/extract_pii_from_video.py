@@ -1,11 +1,14 @@
 """
 Extract all PII (Personally Identifiable Information) from processed video.
 
+Uses centralized PII definitions from app/pii/definitions.py
+based on DPDPA 2023 and Indian compliance framework.
+
 This script:
 1. Retrieves all frames from the vector database
 2. Extracts OCR text from each frame
-3. Detects PII patterns (phone numbers, emails, names, etc.)
-4. Creates a comprehensive report with timestamps
+3. Detects PII patterns (phone numbers, emails, Aadhaar, PAN, OTP, names, etc.)
+4. Creates a comprehensive report with timestamps and categories
 """
 import sys
 from pathlib import Path
@@ -16,6 +19,7 @@ from collections import defaultdict
 sys.path.insert(0, str(Path(__file__).parent))
 
 from app.services.vector_store import VectorStore
+from app.pii.definitions import get_all_patterns, PII_CATEGORIES
 from weaviate.classes.query import Filter
 import logging
 
@@ -33,33 +37,18 @@ class PIIExtractor:
 
     def __init__(self):
         self.vector_store = VectorStore()
-
-        # PII detection patterns
-        self.patterns = {
-            "phone_india": r'\+?91[-.\s]?[6-9]\d{9}',
-            "phone_intl": r'\+?\d{1,3}[-.\s]?\(?\d{1,4}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,9}',
-            "email": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
-            "credit_card": r'\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b',
-            "aadhaar": r'\b\d{4}[-\s]?\d{4}[-\s]?\d{4}\b',
-            "pan": r'\b[A-Z]{5}\d{4}[A-Z]\b',
-            "ip_address": r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b',
-            "url": r'https?://[^\s]+',
-            "ssn": r'\b\d{3}-\d{2}-\d{4}\b',
-        }
+        self.pii_patterns = get_all_patterns()
 
     def get_all_frames(self, video_id: str):
         """Retrieve all frames for a video from vector database"""
         try:
-            # Get all objects from VideoContent collection
             collection = self.vector_store.client.collections.get("VideoContent")
 
-            # Query with filter for specific video
             response = collection.query.fetch_objects(
                 filters=Filter.by_property("video_id").equal(video_id),
-                limit=200
+                limit=500
             )
 
-            # Convert to results format
             results = []
             for obj in response.objects:
                 results.append({
@@ -83,15 +72,64 @@ class PIIExtractor:
             return []
 
     def detect_pii_in_text(self, text: str) -> dict:
-        """Detect all PII patterns in text"""
+        """Detect all PII patterns in text using centralized definitions"""
         findings = defaultdict(list)
 
-        for pii_type, pattern in self.patterns.items():
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            if matches:
-                # Deduplicate matches
-                unique_matches = list(set(matches))
-                findings[pii_type].extend(unique_matches)
+        for pattern_def in self.pii_patterns:
+            # Check context requirement
+            if pattern_def.context_required:
+                if not any(w in text.lower() for w in pattern_def.context_words):
+                    continue
+
+            matches = re.findall(pattern_def.regex, text, re.IGNORECASE)
+            if not matches:
+                continue
+
+            # Common words that are NOT names (OCR false positives)
+            NOT_NAMES = {
+                'enter', 'basic', 'info', 'optional', 'helps', 'create',
+                'will', 'appear', 'your', 'the', 'all', 'updates',
+                'edit', 'designed', 'sign', 'tap', 'continue', 'next',
+                'back', 'done', 'save', 'cancel', 'close', 'open',
+                'select', 'choose', 'enable', 'disable', 'allow',
+            }
+
+            cleaned = []
+            for match in matches:
+                value = match.strip()
+
+                # For name patterns, reject if any word is a common UI word
+                if pattern_def.name == "name_labeled":
+                    words = value.lower().split()
+                    if any(w in NOT_NAMES for w in words):
+                        continue
+                    # Name must have at least one word with 3+ chars
+                    if not any(len(w) >= 3 for w in words):
+                        continue
+
+                # For patterns needing digit cleanup (phone numbers with OCR spaces)
+                if pattern_def.needs_digit_cleanup:
+                    digits_only = re.sub(r'[^\d]', '', value)
+                    if len(digits_only) == 12 and digits_only.startswith('91'):
+                        value = '+91-' + digits_only[2:]
+                    elif len(digits_only) == 10 and digits_only[0] in '6789':
+                        value = digits_only
+                    else:
+                        continue  # Not a valid phone number
+
+                cleaned.append(value)
+
+            unique_matches = list(set(cleaned))
+            if unique_matches:
+                findings[pattern_def.name].extend([
+                    {
+                        "value": v,
+                        "display_name": pattern_def.display_name,
+                        "category": pattern_def.category,
+                        "severity": pattern_def.severity,
+                    }
+                    for v in unique_matches
+                ])
 
         return dict(findings)
 
@@ -110,12 +148,6 @@ class PIIExtractor:
         pii_by_type = defaultdict(list)
         pii_timeline = []
 
-        # Debug: Look for frames around the timestamp where phone number was found
-        logger.info("Looking for frames around 7-11 seconds (where phone was found):")
-        target_frames = [f for f in frames if 7.0 <= f.get('timestamp', 0) <= 11.0]
-        for frame in target_frames[:10]:
-            logger.info(f"  [{frame.get('timestamp'):.2f}s]: {frame.get('text', '')}")
-
         for frame in frames:
             text = frame.get('text', '')
             timestamp = frame.get('timestamp', 0.0)
@@ -124,31 +156,36 @@ class PIIExtractor:
             if not text:
                 continue
 
-            # Detect PII in this frame
-            pii_found = self.detect_pii_in_text(text)
+            # Extract only the OCR/content part, skip the metadata prefix
+            ocr_text = text
+            if "Text displayed:" in text:
+                ocr_text = text.split("Text displayed:", 1)[1].strip()
+            elif text.startswith("At timestamp"):
+                continue
+
+            # Detect PII in OCR text only
+            pii_found = self.detect_pii_in_text(ocr_text)
 
             if pii_found:
-                for pii_type, values in pii_found.items():
-                    for value in values:
-                        pii_by_type[pii_type].append({
-                            'value': value,
+                for pii_type, detections in pii_found.items():
+                    for det in detections:
+                        entry = {
+                            'value': det['value'],
+                            'display_name': det['display_name'],
+                            'category': det['category'],
+                            'severity': det['severity'],
                             'timestamp': timestamp,
-                            'frame': frame_num
-                        })
-                        pii_timeline.append({
-                            'type': pii_type,
-                            'value': value,
-                            'timestamp': timestamp,
-                            'frame': frame_num
-                        })
+                            'frame': frame_num,
+                        }
+                        pii_by_type[pii_type].append(entry)
+                        pii_timeline.append({**entry, 'type': pii_type})
 
-        # Display results
         self._display_results(pii_by_type, pii_timeline, video_id)
 
     def _display_results(self, pii_by_type: dict, pii_timeline: list, video_id: str):
-        """Display PII extraction results"""
+        """Display PII extraction results grouped by DPDPA categories"""
         print("\n" + "="*70)
-        print("  PII EXTRACTION REPORT")
+        print("  PII EXTRACTION REPORT (DPDPA 2023 Framework)")
         print("="*70)
         print(f"\nVideo ID: {video_id}")
 
@@ -157,29 +194,55 @@ class PIIExtractor:
             print("\nNote: This is GOOD for privacy compliance!")
             return
 
-        print(f"\n[WARNING] Total PII Types Detected: {len(pii_by_type)}")
-        print(f"Total PII Instances: {sum(len(items) for items in pii_by_type.values())}")
+        total_instances = sum(len(items) for items in pii_by_type.values())
+        high_severity = sum(
+            1 for items in pii_by_type.values()
+            for item in items if item['severity'] == 'high'
+        )
 
-        # Summary by type
+        print(f"\n[WARNING] Total PII Types Detected: {len(pii_by_type)}")
+        print(f"Total PII Instances: {total_instances}")
+        print(f"High Severity Items: {high_severity}")
+
+        # Group by DPDPA category
         print("\n" + "-"*70)
-        print("  PII SUMMARY BY TYPE")
+        print("  PII BY DPDPA CATEGORY")
         print("-"*70)
 
-        for pii_type, items in sorted(pii_by_type.items()):
-            print(f"\n>> {pii_type.upper().replace('_', ' ')}")
-            print(f"   Count: {len(items)}")
+        categories_found = defaultdict(list)
+        for pii_type, items in pii_by_type.items():
+            if items:
+                cat = items[0]['category']
+                categories_found[cat].extend(items)
 
-            # Group by unique value
-            value_groups = defaultdict(list)
+        for cat_key, cat_info in PII_CATEGORIES.items():
+            if cat_key not in categories_found:
+                continue
+
+            items = categories_found[cat_key]
+            print(f"\n  [{cat_info['display_name'].upper()}]")
+            print(f"  {cat_info['description']}")
+
+            # Group by unique value within this category
+            by_display = defaultdict(list)
             for item in items:
-                value_groups[item['value']].append(item)
+                by_display[item['display_name']].append(item)
 
-            for value, occurrences in value_groups.items():
-                print(f"\n   Value: {value}")
-                print(f"   Occurrences: {len(occurrences)}")
-                print(f"   Timestamps: ", end="")
-                timestamps = sorted([f"{o['timestamp']:.2f}s" for o in occurrences])
-                print(", ".join(timestamps))
+            for display_name, occurrences in by_display.items():
+                values = list(set(o['value'] for o in occurrences))
+                severity = occurrences[0]['severity']
+                severity_tag = f"[{severity.upper()}]"
+
+                for value in values:
+                    value_occ = [o for o in occurrences if o['value'] == value]
+                    timestamps = sorted(set(f"{o['timestamp']:.2f}s" for o in value_occ))
+                    ts_str = ", ".join(timestamps[:10])
+                    if len(timestamps) > 10:
+                        ts_str += f" ... (+{len(timestamps)-10} more)"
+
+                    print(f"\n    {severity_tag} {display_name}: {value}")
+                    print(f"         Occurrences: {len(value_occ)}")
+                    print(f"         Timestamps: {ts_str}")
 
         # Timeline view
         print("\n" + "-"*70)
@@ -194,51 +257,58 @@ class PIIExtractor:
                 current_time = item['timestamp']
                 print(f"\n[{current_time:.2f}s] (Frame {item['frame']})")
 
-            print(f"   - {item['type'].replace('_', ' ').title()}: {item['value']}")
+            severity_icon = "!!" if item['severity'] == 'high' else "--"
+            print(f"   {severity_icon} {item['display_name']}: {item['value']}")
 
+        # Compliance summary
         print("\n" + "="*70)
-        print("  [!] PRIVACY COMPLIANCE WARNING")
+        print("  [!] DPDPA 2023 COMPLIANCE WARNING")
         print("="*70)
         print("""
-This video contains Personally Identifiable Information (PII).
+This video contains Personally Identifiable Information (PII)
+as defined under India's Digital Personal Data Protection Act, 2023.
 
 Recommended actions:
-1. Review DPDPA 2025 compliance requirements
+1. Review DPDPA 2023 compliance requirements
 2. Ensure proper consent was obtained for data collection
 3. Implement data minimization practices
 4. Apply redaction/masking if necessary
 5. Maintain audit trail of PII access
+6. Appoint Data Protection Officer if required
 
-PII Types Detected:
+PII Categories Detected:
 """)
-
-        for pii_type in sorted(pii_by_type.keys()):
-            print(f"  * {pii_type.upper().replace('_', ' ')}")
+        for cat_key in sorted(categories_found.keys()):
+            cat_name = PII_CATEGORIES[cat_key]['display_name']
+            count = len(categories_found[cat_key])
+            print(f"  * {cat_name} ({count} instances)")
 
         print("\n" + "="*70)
 
 
 def main():
     """Main entry point"""
+    import argparse
+    parser = argparse.ArgumentParser(description="Extract PII from processed video")
+    parser.add_argument("--video-id", default="test_video_001", help="Video ID to analyze")
+    args = parser.parse_args()
+
     print("""
 ================================================================
-        PII EXTRACTION FROM VIDEO - STEP 1 COMPLETE
+    PII EXTRACTION FROM VIDEO (DPDPA 2023 Framework)
 ================================================================
     """)
 
     extractor = PIIExtractor()
 
-    # Default video ID from test
-    video_id = "test_video_001"
-
-    print(f"[VIDEO] Extracting PII from video: {video_id}")
+    print(f"[VIDEO] Extracting PII from video: {args.video_id}")
     print("[...] Searching through all processed frames...\n")
 
-    extractor.extract_all_pii(video_id)
+    extractor.extract_all_pii(args.video_id)
 
     print("\n[OK] PII extraction complete!")
     print("\n[TIP] This information will be used in STEP 3 for compliance checking")
-    print("      against DPDPA 2025 guidelines.\n")
+    print("      against DPDPA 2023 guidelines.\n")
 
 
 if __name__ == "__main__":

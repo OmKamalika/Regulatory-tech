@@ -17,7 +17,25 @@
       "Bash(findstr:*)",
       "Bash(git config:*)",
       "Bash(gh auth status:*)",
-      "Bash(\"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" auth login -p https -w)"
+      "Bash(\"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" auth login -p https -w)",
+      "Bash(\"c:\\\\Users\\\\mailt\\\\OneDrive\\\\Desktop\\\\Regtech\\\\.venv\\\\Scripts\\\\python.exe\":*)",
+      "Bash(\"c:\\\\Users\\\\mailt\\\\OneDrive\\\\Desktop\\\\Regtech\\\\.venv\\\\Scripts\\\\pip.exe\" show weaviate-client)",
+      "Bash(\"c:\\\\Users\\\\mailt\\\\OneDrive\\\\Desktop\\\\Regtech\\\\backend\\\\venv\\\\Scripts\\\\python.exe\" extract_pii_video2.py)",
+      "Bash(curl:*)",
+      "Bash(where:*)",
+      "Bash(\"c:\\\\Users\\\\mailt\\\\OneDrive\\\\Desktop\\\\Regtech\\\\backend\\\\venv\\\\Scripts\\\\pip.exe\" show pytesseract)",
+      "Bash(\"c:\\\\Users\\\\mailt\\\\OneDrive\\\\Desktop\\\\Regtech\\\\backend\\\\venv\\\\Scripts\\\\pip.exe\" install pytesseract)",
+      "Bash(\"c:\\\\Users\\\\mailt\\\\OneDrive\\\\Desktop\\\\Regtech\\\\backend\\\\venv\\\\Scripts\\\\python.exe\" reprocess_video_with_ocr.py \"C:\\\\Users\\\\mailt\\\\Downloads\\\\WhatsApp Video 2026-02-15 at 8.24.06 PM.mp4\" --video-id \"test_video_002\")",
+      "Bash(docker compose:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker restart:*)",
+      "Bash(timeout 30 bash -c 'while true; do status=$\\(curl -s -o /dev/null -w \"\"%{http_code}\"\" http://localhost:8080/v1/.well-known/ready 2>/dev/null\\); if [ \"\"$status\"\" = \"\"200\"\" ]; then echo \"\"Weaviate READY\"\"; break; fi; echo \"\"Waiting... \\(status: $status\\)\"\"; sleep 2; done')",
+      "Bash(venvScriptspython.exe:*)",
+      "Bash(\"c:/Users/mailt/OneDrive/Desktop/Regtech/backend/venv/Scripts/python.exe\" -c \"\nimport sys, os\nos.chdir\\(r''c:\\\\Users\\\\mailt\\\\OneDrive\\\\Desktop\\\\Regtech\\\\backend''\\)\nsys.path.insert\\(0, r''c:\\\\Users\\\\mailt\\\\OneDrive\\\\Desktop\\\\Regtech\\\\backend''\\)\n\nfrom app.services.video_content_vectorizer import VideoContentVectorizer\n\nvectorizer = VideoContentVectorizer\\(\\)\n\n# First delete any old data for this video ID\ndeleted = vectorizer.vector_store.delete_video_content\\(''test_video_003''\\)\nprint\\(f''Deleted {deleted} old entries''\\)\n\n# Process the new video\nprint\\(''Processing video... this may take a few minutes...''\\)\nstats = vectorizer.process_video\\(\n    video_id=''test_video_003'',\n    video_path=r''C:\\\\Users\\\\mailt\\\\Downloads\\\\Untitled design.mp4'',\n    max_frames=50,\n    process_audio=False,\n    process_ocr=True\n\\)\n\nprint\\(\\)\nprint\\(''=''*60\\)\nprint\\(''  PROCESSING COMPLETE''\\)\nprint\\(''=''*60\\)\nfor k, v in stats.items\\(\\):\n    print\\(f''  {k}: {v}''\\)\n\")",
+      "Bash(\"c:/Users/mailt/OneDrive/Desktop/Regtech/backend/venv/Scripts/python.exe\":*)",
+      "Bash(\"c:/Users/mailt/OneDrive/Desktop/Regtech/backend/venv/Scripts/python.exe\" -c:*)",
+      "Bash(\"c:/Users/mailt/OneDrive/Desktop/Regtech/backend/venv/Scripts/python.exe\" -c \"\nimport cv2\ncap = cv2.VideoCapture\\(r''C:\\\\Users\\\\mailt\\\\Downloads\\\\WhatsApp Video 2026-02-17 at 12.20.19 PM.mp4''\\)\nfps = cap.get\\(cv2.CAP_PROP_FPS\\)\ntotal_frames = int\\(cap.get\\(cv2.CAP_PROP_FRAME_COUNT\\)\\)\nduration = total_frames / fps\nwidth = int\\(cap.get\\(cv2.CAP_PROP_FRAME_WIDTH\\)\\)\nheight = int\\(cap.get\\(cv2.CAP_PROP_FRAME_HEIGHT\\)\\)\ncap.release\\(\\)\n\nprint\\(f''Duration: {duration:.1f} seconds \\({duration/60:.1f} minutes\\)''\\)\nprint\\(f''Total frames in video: {total_frames}''\\)\nprint\\(f''FPS: {fps}''\\)\nprint\\(f''Resolution: {width}x{height}''\\)\nprint\\(f''We only extracted 50 frames = 1 frame every {duration/50:.1f}s''\\)\nprint\\(f''Last frame timestamp we captured: 38.16s''\\)\nprint\\(f''Video we MISSED: {duration - 38.16:.1f}s \\({\\(duration-38.16\\)/duration*100:.0f}% of video\\)''\\)\n\")",
+      "Bash(\"c:/Users/mailt/OneDrive/Desktop/Regtech/backend/venv/Scripts/python.exe\" -c \"\nimport sys, os\nos.chdir\\(r''c:\\\\Users\\\\mailt\\\\OneDrive\\\\Desktop\\\\Regtech\\\\backend''\\)\nsys.path.insert\\(0, r''c:\\\\Users\\\\mailt\\\\OneDrive\\\\Desktop\\\\Regtech\\\\backend''\\)\n\nfrom app.services.video_content_vectorizer import VideoContentVectorizer\n\nvectorizer = VideoContentVectorizer\\(\\)\n\n# Delete old data\ndeleted = vectorizer.vector_store.delete_video_content\\(''test_video_004''\\)\nprint\\(f''Deleted {deleted} old entries''\\)\n\n# Reprocess with auto-scaled frames\nprint\\(''Reprocessing video 4 with improved frame extraction...''\\)\nstats = vectorizer.process_video\\(\n    video_id=''test_video_004'',\n    video_path=r''C:\\\\Users\\\\mailt\\\\Downloads\\\\WhatsApp Video 2026-02-17 at 12.20.19 PM.mp4'',\n    max_frames=50,\n    process_audio=False,\n    process_ocr=True\n\\)\n\nprint\\(\\)\nprint\\(''=''*60\\)\nprint\\(''  PROCESSING COMPLETE''\\)\nprint\\(''=''*60\\)\nfor k, v in stats.items\\(\\):\n    print\\(f''  {k}: {v}''\\)\n\")"
     ]
   }
 }
