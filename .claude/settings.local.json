@@ -14,7 +14,10 @@
       "Bash(find:*)",
       "Bash(winget install:*)",
       "Bash(\"C:\\\\Program Files\\\\Tesseract-OCR\\\\tesseract.exe\":*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(git config:*)",
+      "Bash(gh auth status:*)",
+      "Bash(\"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\" auth login -p https -w)"
     ]
   }
 }
