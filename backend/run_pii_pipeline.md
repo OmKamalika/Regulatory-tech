@@ -33,25 +33,18 @@ curl "http://localhost:8080/v1/.well-known/ready" -UseBasicParsing
 
 ### Step 3: Process the Video (Full Pipeline)
 
+Replace **`MY_VIDEO_ID`** and **`VIDEO_PATH`** with your values, then run:
+
 ```powershell
 cd c:\Users\mailt\OneDrive\Desktop\Regtech\backend
 
+venv\Scripts\python.exe -c "from app.services.video_content_vectorizer import VideoContentVectorizer; vectorizer = VideoContentVectorizer(); vectorizer.vector_store.delete_video_content('MY_VIDEO_ID'); stats = vectorizer.process_video(video_id='MY_VIDEO_ID', video_path=r'VIDEO_PATH', max_frames=50, process_audio=False, process_ocr=True); print(stats)"
+```
+
+**Example** (with real values):
+
+```powershell
 venv\Scripts\python.exe -c "from app.services.video_content_vectorizer import VideoContentVectorizer; vectorizer = VideoContentVectorizer(); vectorizer.vector_store.delete_video_content('test_video_005'); stats = vectorizer.process_video(video_id='test_video_005', video_path=r'C:\Users\mailt\Downloads\WhatsApp Video 2026-02-17 at 12.20.19 PM.mp4', max_frames=50, process_audio=False, process_ocr=True); print(stats)"
-
-# Delete any previous data for this video ID (optional, for re-runs)#
-vectorizer.vector_store.delete_video_content('my_video_001')
-
-# Process the video — change video_id and video_path to your values#
-stats = vectorizer.process_video(
-    video_id='my_video_001',
-    video_path=r'C:\path\to\your\video.mp4',
-    max_frames=50,
-    process_audio=False,
-    process_ocr=True
-)
-
-print(stats)
-"
 ```
 
 **Why**: This runs the complete Step 1 pipeline:
