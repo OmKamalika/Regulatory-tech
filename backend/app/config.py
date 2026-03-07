@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
     # Database
-    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/regtech_db"
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5433/regtech_db"
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"

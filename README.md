@@ -89,7 +89,7 @@ docker-compose up -d
 ```
 
 This starts:
-- PostgreSQL (port 5432)
+- PostgreSQL (port 5433)
 - Redis (port 6379)
 - Weaviate (port 8080)
 - MinIO (port 9000, console: 9001)
