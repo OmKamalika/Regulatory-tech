@@ -4,6 +4,7 @@ Frame extraction service using FFmpeg and OpenCV for scene change detection.
 import cv2
 import ffmpeg
 import os
+import subprocess
 import logging
 from typing import List, Tuple
 from dataclasses import dataclass
@@ -32,6 +33,23 @@ class FrameExtractor:
     def __init__(self, fps: int = None, enable_scene_detection: bool = True):
         self.fps = fps or settings.FRAME_EXTRACTION_FPS
         self.enable_scene_detection = enable_scene_detection
+
+        # Verify FFmpeg binary is available at startup
+        try:
+            result = subprocess.run(
+                ["ffmpeg", "-version"],
+                capture_output=True, timeout=5
+            )
+            if result.returncode != 0:
+                raise EnvironmentError("ffmpeg returned non-zero exit code")
+            logger.info("FFmpeg binary verified OK")
+        except Exception as e:
+            raise EnvironmentError(
+                "FFmpeg binary not found. Install it and ensure it is on your PATH.\n"
+                "Windows: winget install ffmpeg  or  https://www.gyan.dev/ffmpeg/builds/\n"
+                f"Original error: {e}"
+            )
+
         logger.info(f"Initialized FrameExtractor (fps={self.fps}, scene_detection={self.enable_scene_detection})")
 
     def extract_frames(
@@ -263,31 +281,34 @@ class FrameExtractor:
             logger.error(f"Error getting video info: {e}")
             raise
 
-    def extract_audio(self, video_path: str, output_path: str) -> str:
+    def extract_audio(self, video_path: str, output_path: str) -> str | None:
         """
         Extract audio track from video.
 
         Args:
             video_path: Path to input video
-            output_path: Path for output audio file (should be .wav or .mp3)
+            output_path: Path for output audio file (should be .wav)
 
         Returns:
-            Path to extracted audio file
+            Path to extracted audio file, or None if video has no audio track.
         """
         try:
-            logger.info(f"Extracting audio from {video_path}")
+            # Check if video has an audio stream before attempting extraction
+            info = self.get_video_info(video_path)
+            if not info.get("has_audio"):
+                logger.info(f"Video has no audio track — skipping audio extraction: {video_path}")
+                return None
 
-            # Extract audio using ffmpeg
+            logger.info(f"Extracting audio from {video_path}")
             stream = ffmpeg.input(video_path)
             stream = ffmpeg.output(stream.audio, output_path, acodec='pcm_s16le', ac=1, ar='16000')
             ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)
-
             logger.info(f"Audio extracted to {output_path}")
             return output_path
 
         except ffmpeg.Error as e:
-            logger.error(f"FFmpeg error: {e.stderr.decode()}")
-            raise
+            logger.error(f"FFmpeg error during audio extraction: {e.stderr.decode()}")
+            return None  # Non-fatal — continue pipeline without audio
         except Exception as e:
             logger.error(f"Error extracting audio: {e}")
-            raise
+            return None  # Non-fatal — continue pipeline without audio

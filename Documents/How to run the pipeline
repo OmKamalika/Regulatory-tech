@@ -1,0 +1,24 @@
+Terminal 1 — API Server
+
+.\start.ps1 api
+
+Terminal 2 — Celery Worker
+
+.\start.ps1 docker
+
+.\start.ps1 worker
+
+Terminal 3 — Submit video + poll status
+
+$result = Invoke-RestMethod -Uri "http://localhost:8000/api/v1/videos/upload" `  -Method POST`
+-ContentType "application/json" `
+-Body '{"video_path": "C:/Users/mailt/OneDrive/Desktop/testvideo/WhatsApp Video 2026-02-15 at 2.47.57 PM.mp4"}'
+
+$result
+Then poll until status is completed:
+
+Invoke-RestMethod -Uri "http://localhost:8000/api/v1/videos/$($result.video_id)/status"
+
+Then fetch the full report:
+
+Invoke-RestMethod -Uri "http://localhost:8000/api/v1/compliance/report/$($result.video_id)"

@@ -167,11 +167,12 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# TODO: Import and include API routers
-# from app.api.v1 import videos, compliance, guidelines
-# app.include_router(videos.router, prefix="/api/v1/videos", tags=["videos"])
-# app.include_router(compliance.router, prefix="/api/v1/compliance", tags=["compliance"])
-# app.include_router(guidelines.router, prefix="/api/v1/guidelines", tags=["guidelines"])
+# API routers
+from app.api.v1.compliance import router as compliance_router
+from app.api.v1.videos import router as videos_router
+
+app.include_router(videos_router, prefix="/api/v1/videos", tags=["videos"])
+app.include_router(compliance_router, prefix="/api/v1/compliance", tags=["compliance"])
 
 
 if __name__ == "__main__":

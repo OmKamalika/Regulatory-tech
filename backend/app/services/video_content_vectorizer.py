@@ -26,6 +26,9 @@ from app.services.embedding_service import (
     create_transcription_description
 )
 from app.services.vector_store import VectorStore
+from app.db.session import SessionLocal
+from app.models.frame_analysis import FrameAnalysis
+from app.models.transcription import TranscriptionSegment
 
 logger = logging.getLogger(__name__)
 
@@ -99,18 +102,31 @@ class VideoContentVectorizer:
                 stats["frames_processed"] = len(frames)
                 logger.info(f"Extracted {len(frames)} frames")
 
-                # Step 2: Extract and transcribe audio
+                # Step 2: Extract and transcribe audio (skipped for video-only MP4s)
                 transcription_segments = []
                 if process_audio:
                     logger.info("Step 2: Transcribing audio...")
                     audio_path = os.path.join(temp_dir, "audio.wav")
-                    self.frame_extractor.extract_audio(video_path, audio_path)
+                    extracted = self.frame_extractor.extract_audio(video_path, audio_path)
 
-                    transcription_segments = self.transcriber.get_segments(audio_path)
-                    stats["transcription_segments"] = len(transcription_segments)
-                    logger.info(f"Transcribed {len(transcription_segments)} segments")
+                    if extracted:
+                        transcription_segments = self.transcriber.get_segments(audio_path)
+                        stats["transcription_segments"] = len(transcription_segments)
+                        logger.info(f"Transcribed {len(transcription_segments)} segments")
+                    else:
+                        logger.info("No audio track found — skipping transcription")
 
                 # Step 3: Process frames (OCR + Visual Analysis)
+                ocr_info = self.ocr_service.get_reader_info()
+                if not ocr_info.get("can_read_text"):
+                    logger.warning(
+                        "⚠️  OCR engine '%s' cannot read text. Visual PII (phone numbers, "
+                        "Aadhaar, PAN visible on screen) will NOT be detected. "
+                        "Install EasyOCR or Tesseract for full compliance coverage.",
+                        ocr_info.get("engine", "fallback")
+                    )
+                else:
+                    logger.info("OCR engine active: %s", ocr_info.get("engine"))
                 logger.info("Step 3: Analyzing frames...")
                 frame_data = self._process_frames(
                     frames,
@@ -155,8 +171,9 @@ class VideoContentVectorizer:
             logger.debug(f"Processing frame {i+1}/{len(frames)}")
 
             try:
-                # Visual analysis
-                visual_summary = self.visual_analyzer.get_summary(frame.file_path)
+                # Visual analysis — call analyze_image() once to get real confidence scores
+                detected_objects = self.visual_analyzer.analyze_image(frame.file_path)
+                person_count = sum(1 for obj in detected_objects if obj.class_name == "person")
 
                 # OCR (if enabled)
                 ocr_text = ""
@@ -169,10 +186,14 @@ class VideoContentVectorizer:
                     "frame_number": frame.frame_number,
                     "timestamp": frame.timestamp,
                     "file_path": frame.file_path,
-                    "objects_detected": list(visual_summary["class_counts"].keys()),
+                    "objects_detected": [
+                        {"class": obj.class_name, "confidence": round(obj.confidence, 3)}
+                        for obj in detected_objects
+                    ],
                     "ocr_text": ocr_text,
-                    "has_persons": visual_summary["has_persons"],
-                    "total_objects": visual_summary["total_objects"]
+                    "has_persons": person_count > 0,
+                    "persons_count": person_count,
+                    "total_objects": len(detected_objects),
                 })
 
             except Exception as e:
@@ -202,11 +223,11 @@ class VideoContentVectorizer:
 
         # Process frame data
         for frame in frame_data:
-            # Create text description
+            # Create text description — embedding function expects class name strings
             text_description = create_frame_description(
                 frame_number=frame["frame_number"],
                 timestamp=frame["timestamp"],
-                objects_detected=frame["objects_detected"],
+                objects_detected=[o["class"] for o in frame["objects_detected"]],
                 ocr_text=frame["ocr_text"]
             )
 
@@ -223,7 +244,7 @@ class VideoContentVectorizer:
                 "frame_number": frame["frame_number"],
                 "frame_url": "",  # TODO: Upload to MinIO and add URL
                 "metadata": {
-                    "objects": frame["objects_detected"],
+                    "objects": [o["class"] for o in frame["objects_detected"]],
                     "has_persons": frame["has_persons"],
                     "ocr_text": frame["ocr_text"]
                 }
@@ -257,6 +278,39 @@ class VideoContentVectorizer:
         # Batch insert to vector store
         logger.info(f"Storing {len(items_to_store)} embeddings in vector database")
         self.vector_store.add_video_content_batch(items_to_store)
+
+        # Persist frame analyses and transcription segments to PostgreSQL
+        db = SessionLocal()
+        try:
+            for frame in frame_data:
+                objects = frame["objects_detected"]
+                db.add(FrameAnalysis(
+                    video_id=video_id,
+                    frame_number=frame["frame_number"],
+                    timestamp=frame["timestamp"],
+                    objects_detected=[{"class": obj, "confidence": 1.0} for obj in objects] if objects else [],
+                    persons_detected=1 if frame.get("has_persons") else 0,
+                    ocr_text=frame.get("ocr_text", ""),
+                    visual_analysis_completed=True,
+                    ocr_completed=True,
+                    vectorized=True,
+                ))
+            for segment in transcription_segments:
+                db.add(TranscriptionSegment(
+                    video_id=video_id,
+                    start_time=segment.start,
+                    end_time=segment.end,
+                    text=segment.text,
+                    confidence=getattr(segment, "confidence", None),
+                    vectorized=True,
+                ))
+            db.commit()
+            logger.info(f"Saved {len(frame_data)} frame analyses and {len(transcription_segments)} transcription segments to PostgreSQL")
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to save to PostgreSQL: {e}")
+        finally:
+            db.close()
 
         return len(items_to_store)
 
