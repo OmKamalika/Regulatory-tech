@@ -7,9 +7,12 @@ Responsibilities:
 3. Optionally trigger Phase 2 LLM narrative via Celery (async)
 4. Return the report ID so the API can poll for status
 """
+import logging
 import uuid
 from datetime import datetime
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from app.db.session import SessionLocal
 from app.models.compliance_report import ComplianceReport, ComplianceStatus
@@ -57,8 +60,20 @@ def check_video_compliance(video_id: str, use_llm: bool = False) -> dict:
         except ImportError:
             pass  # Celery tasks not yet wired — Phase 2 skipped gracefully
 
+    completed_report_id = final_state.get("report_id") or report_id
+
+    # Auto-purge raw video data now that the report is saved (DPDPA data minimisation).
+    # Keeps: compliance_reports, compliance_findings, audit_logs.
+    # Deletes: MinIO frames/video, Weaviate vectors, frame_analyses, transcription_segments.
+    try:
+        from app.services.data_lifecycle import purge_raw_data
+        purge_raw_data(video_id=video_id, report_id=completed_report_id)
+        logger.info("Auto-purged raw data for video %s after compliance report %s", video_id, completed_report_id)
+    except Exception as purge_err:
+        logger.warning("Auto-purge failed for video %s (non-fatal): %s", video_id, purge_err)
+
     return {
-        "report_id": final_state.get("report_id") or report_id,
+        "report_id": completed_report_id,
         "video_id": video_id,
         "status": final_state.get("report_data", {}).get("status", "pending_review"),
         "compliance_score": final_state.get("report_data", {}).get("compliance_score"),
