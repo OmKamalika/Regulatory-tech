@@ -28,7 +28,7 @@ transformers
 torch
 torchvision
 ultralytics
-easyocr
+easyocr==1.7.0
 
 # Additional dependencies
 accelerate

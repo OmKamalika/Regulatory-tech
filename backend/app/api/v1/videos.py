@@ -22,7 +22,8 @@ router = APIRouter()
 
 class VideoUploadRequest(BaseModel):
     video_path: str
-    video_id: str = None  # Optional — auto-generated if omitted
+    video_id: str = None   # Optional — auto-generated if omitted
+    force: bool = False    # If True, delete existing data for this path/video_id and re-process
 
 
 @router.post("/upload", summary="Register a video by path and trigger full pipeline")
@@ -30,6 +31,10 @@ def upload_video(request: VideoUploadRequest):
     """
     Accepts a local file path, creates a Video record, and kicks off the
     full async pipeline (vectorization → DPDPA compliance check).
+
+    Pass `force: true` to delete any existing record for this video_id (or same path)
+    and re-run the full pipeline from scratch — useful when OCR or other services
+    have been fixed and stale results need to be replaced.
 
     Returns the video_id to use for status polling.
     """
@@ -44,16 +49,43 @@ def upload_video(request: VideoUploadRequest):
     if ext not in allowed:
         raise HTTPException(status_code=400, detail=f"Unsupported format: {ext}. Allowed: {allowed}")
 
+    from app.config import settings as _settings
+    file_size = os.path.getsize(path)
+    if file_size > _settings.MAX_UPLOAD_SIZE:
+        max_gb = _settings.MAX_UPLOAD_SIZE / (1024 ** 3)
+        raise HTTPException(
+            status_code=413,
+            detail=f"File size {file_size / (1024 ** 3):.2f} GB exceeds the {max_gb:.0f} GB limit.",
+        )
+
     video_id = request.video_id or str(uuid.uuid4())
     filename = os.path.basename(path)
-    file_size = os.path.getsize(path)
 
     db = SessionLocal()
     try:
-        # Reject duplicate video_id
-        existing = db.query(Video).filter(Video.id == video_id).first()
-        if existing:
-            raise HTTPException(status_code=409, detail=f"video_id '{video_id}' already exists")
+        if request.force:
+            # Delete by explicit video_id first
+            existing_by_id = db.query(Video).filter(Video.id == video_id).first() if request.video_id else None
+            # Also find any prior upload of the same file path
+            existing_by_path = db.query(Video).filter(Video.minio_path == path).all()
+
+            to_delete = {v.id: v for v in existing_by_path}
+            if existing_by_id:
+                to_delete[existing_by_id.id] = existing_by_id
+
+            for v in to_delete.values():
+                db.delete(v)  # CASCADE removes FrameAnalysis, ComplianceReport, AuditLog, etc.
+
+            if to_delete:
+                db.commit()
+        else:
+            # Reject duplicate video_id (existing behaviour)
+            existing = db.query(Video).filter(Video.id == video_id).first()
+            if existing:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"video_id '{video_id}' already exists. Use force=true to re-process.",
+                )
 
         video = Video(
             id=video_id,
@@ -76,12 +108,29 @@ def upload_video(request: VideoUploadRequest):
     from app.tasks.video_pipeline import process_video_task
     task = process_video_task.delay(video_id=video_id, video_path=path)
 
-    return {
+    # Warn immediately if OCR cannot read text — user should know before waiting 3+ minutes
+    pipeline_warnings = []
+    try:
+        from app.services.ocr_service import OCRService
+        ocr_info = OCRService().get_reader_info()
+        if not ocr_info.get("can_read_text", False):
+            pipeline_warnings.append(
+                f"OCR engine '{ocr_info.get('engine', 'fallback')}' cannot read text. "
+                "PII visible on screen (phone numbers, Aadhaar, PAN cards) will NOT be detected. "
+                "Install EasyOCR or Tesseract, then re-upload with force=true to get a full report."
+            )
+    except Exception:
+        pass
+
+    response = {
         "video_id": video_id,
         "task_id": task.id,
         "status": "queued",
         "message": "Pipeline started. Poll /api/v1/videos/{video_id}/status for progress.",
     }
+    if pipeline_warnings:
+        response["warnings"] = pipeline_warnings
+    return response
 
 
 @router.get("/{video_id}/status", summary="Get video processing status and compliance result")
@@ -96,6 +145,29 @@ def get_video_status(video_id: str):
         if not video:
             raise HTTPException(status_code=404, detail=f"Video {video_id} not found")
 
+        # Per-stage breakdown with actionable status labels
+        from app.models.frame_analysis import FrameAnalysis
+        from sqlalchemy import func
+        frames_total = db.query(func.count(FrameAnalysis.id)).filter(
+            FrameAnalysis.video_id == video_id
+        ).scalar() or 0
+        frames_with_text = db.query(func.count(FrameAnalysis.id)).filter(
+            FrameAnalysis.video_id == video_id,
+            FrameAnalysis.ocr_text != "",
+            FrameAnalysis.ocr_text.isnot(None),
+        ).scalar() or 0
+        frames_with_persons = db.query(func.count(FrameAnalysis.id)).filter(
+            FrameAnalysis.video_id == video_id,
+            FrameAnalysis.persons_detected > 0,
+        ).scalar() or 0
+
+        ocr_coverage = round(frames_with_text / frames_total, 2) if frames_total else 0
+        ocr_stage_status = (
+            "completed" if ocr_coverage > 0.1 else
+            "degraded" if frames_total > 0 else
+            "pending"
+        )
+
         response = {
             "video_id": video_id,
             "filename": video.original_filename,
@@ -105,12 +177,24 @@ def get_video_status(video_id: str):
             "created_at": video.created_at,
             "processing_started_at": video.processing_started_at,
             "processing_completed_at": video.processing_completed_at,
-            "pipeline": {
-                "visual_analysis": video.visual_analysis_completed,
-                "ocr": video.ocr_completed,
-                "transcription": video.transcription_completed,
-                "vectorization": video.vectorization_completed,
-                "frames_processed": video.frames_processed,
+            "pipeline_stages": {
+                "frame_extraction": {
+                    "status": "completed" if video.visual_analysis_completed else "pending",
+                    "frames_total": frames_total,
+                    "persons_detected_in": frames_with_persons,
+                },
+                "ocr": {
+                    "status": ocr_stage_status,
+                    "frames_with_text": frames_with_text,
+                    "coverage": ocr_coverage,
+                    "warning": "OCR read no text — PII detection may be incomplete" if ocr_stage_status == "degraded" else None,
+                },
+                "transcription": {
+                    "status": "completed" if video.transcription_completed else "pending",
+                },
+                "vectorization": {
+                    "status": "completed" if video.vectorization_completed else "pending",
+                },
             },
         }
 

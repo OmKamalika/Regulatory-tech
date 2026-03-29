@@ -970,6 +970,38 @@ VIDEO_SPECIFIC_RULES = [
         ),
         related_rules=["DPDPA-S4-005", "DPDPA-S10-001"],
     ),
+    DPDPARule(
+        rule_id="DPDPA-VID-005",
+        name="GST Number Unmasked in Video",
+        section_ref="Section 8(4) + Section 2(t)",
+        category="video_pii",
+        requirement_text=(
+            "A GST registration number visible on screen can directly identify "
+            "the registered taxpayer. For sole proprietors and individuals, the GST "
+            "number is linked to their PAN (personal identifier) and name. Displaying "
+            "an unmasked GST number in video content constitutes exposure of "
+            "business identity data that may indirectly identify a natural person. "
+            "Under Section 8(4), data fiduciaries must protect personal data with "
+            "reasonable security safeguards including masking identifiers in shared content."
+        ),
+        severity="critical",
+        check_types=["gst_detection"],
+        violation_condition=(
+            "A GST number is visible in plaintext in video frames without masking. "
+            "For sole proprietors, this directly exposes personal data (PAN linkage). "
+            "For companies, this exposes business identity without consent."
+        ),
+        applicability="Any video content showing screens, documents, or text with GST numbers.",
+        penalty_ref="Section 33(b) - up to 200 crore INR",
+        video_specific=True,
+        detection_guidance=(
+            "Scan OCR text from video frames for 15-character GST numbers "
+            "(format: 2-digit state code + 5 PAN letters + 4 PAN digits + "
+            "1 PAN letter + entity number + Z + checksum). "
+            "Flag any unmasked GST number. Expected action: mask as XX****F1ZV."
+        ),
+        related_rules=["DPDPA-S8-002", "DPDPA-VID-001"],
+    ),
 ]
 
 
@@ -1055,12 +1087,23 @@ def get_video_specific_rules() -> List[DPDPARule]:
     return [rule for rule in get_all_rules() if rule.video_specific]
 
 
+_RULES_BY_CHECK_TYPE: dict = {}
+_RULES_CACHE_BUILT = False
+
+
+def _build_rules_cache() -> None:
+    global _RULES_BY_CHECK_TYPE, _RULES_CACHE_BUILT
+    for rule in get_all_rules():
+        for ct in rule.check_types:
+            _RULES_BY_CHECK_TYPE.setdefault(ct, []).append(rule)
+    _RULES_CACHE_BUILT = True
+
+
 def get_rules_by_check_type(check_type: str) -> List[DPDPARule]:
-    """Return all rules that require a specific check type"""
-    return [
-        rule for rule in get_all_rules()
-        if check_type in rule.check_types
-    ]
+    """Return all rules that require a specific check type (cached)."""
+    if not _RULES_CACHE_BUILT:
+        _build_rules_cache()
+    return _RULES_BY_CHECK_TYPE.get(check_type, [])
 
 
 def get_rules_by_severity(severity: str) -> List[DPDPARule]:

@@ -10,13 +10,13 @@ Phase 1 (sync, ~30s): All nodes up to save_to_db — produces structured finding
 Phase 2 (async, via Celery): LLM writes executive_summary after Phase 1 completes.
 """
 import time
-import re
 import uuid
 from datetime import datetime
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 
 from app.dpdpa.definitions import get_all_rules, get_rules_by_check_type
+from app.common.patterns import detect_pii as _detect_pii_in_text, detect_gst as _detect_gst_in_text
 # Prompt templates imported here for use in Phase 2 (LLM summary generation)
 # Currently used by compliance_checker.py when use_llm=True
 from app.langchain_components.prompts.compliance_prompts import (  # noqa: F401
@@ -45,37 +45,6 @@ class ComplianceState(TypedDict):
     use_llm: bool                   # Whether to call Ollama for narrative (Phase 2)
 
 
-# ---------------------------------------------------------------------------
-# PII regex patterns (same as Step 1)
-# ---------------------------------------------------------------------------
-
-PII_PATTERNS = {
-    "phone_india": r"\+?91[.\-\s]?[6-9]\d{9}",
-    "phone_intl": r"\+\d{1,3}[.\-\s]?\d{4,5}[.\-\s]?\d{4,10}",
-    "phone_10": r"\b[6-9]\d{9}\b",
-    "email": r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b",
-    "credit_card": r"\b\d{4}[\-\s]?\d{4}[\-\s]?\d{4}[\-\s]?\d{4}\b",
-    "aadhaar": r"\b\d{4}[\-\s]\d{4}[\-\s]\d{4}\b",
-    "pan": r"\b[A-Z]{5}\d{4}[A-Z]\b",
-    "ip_address": r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b",
-    "dob": r"\b\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}\b",
-    "url": r"https?://[^\s]+",
-    "gst": r"\b\d{2}[A-Z]{5}\d{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}\b",
-}
-
-
-def _detect_pii_in_text(text: str) -> List[dict]:
-    """Scan text for PII using regex patterns. Returns list of {type, match}."""
-    if not text:
-        return []
-    found = []
-    for pii_type, pattern in PII_PATTERNS.items():
-        matches = re.findall(pattern, text)
-        for m in matches:
-            found.append({"type": pii_type, "match": m})
-    return found
-
-
 def _make_audit_entry(step: str, action: str, input_data: dict = None,
                       output_data: dict = None, rule_id: str = None,
                       duration_ms: int = None, success: bool = True,
@@ -101,7 +70,7 @@ def _make_finding(rule, frame_data: dict = None, transcript_data: dict = None,
     frame_num = frame_data.get("frame_number") if frame_data else None
     objects = frame_data.get("objects_detected") if frame_data else []
     ocr_text = frame_data.get("ocr_text", "") if frame_data else ""
-    pii_strs = [f"{p['type']}:{p['match']}" for p in (pii_found or [])]
+    pii_strs = [f"{p['type']}:REDACTED" for p in (pii_found or [])]
 
     return {
         "id": str(uuid.uuid4()),
@@ -204,6 +173,7 @@ def check_visual_rules(state: ComplianceState) -> ComplianceState:
     """For each frame, map detected objects to check_types and find triggered rules."""
     t0 = time.time()
     audit = list(state.get("audit_entries", []))
+    errors = list(state.get("errors", []))
     findings = []
 
     OBJECT_TO_CHECK_TYPE = {
@@ -214,42 +184,60 @@ def check_visual_rules(state: ComplianceState) -> ComplianceState:
         "girl": "children_detection",
     }
 
-    for frame in state.get("frames", []):
-        objects = frame.get("objects_detected", [])
-        if not objects:
-            continue
+    try:
+        # Pre-fetch all visual rules once (avoids O(n*frames) rule iteration)
+        all_visual_check_types = set(OBJECT_TO_CHECK_TYPE.values())
+        visual_rules_by_check_type = {
+            ct: get_rules_by_check_type(ct) for ct in all_visual_check_types
+        }
 
-        # Determine which check_types are triggered by detected objects
-        triggered_check_types = set()
-        object_labels = []
-        for obj in objects:
-            label = (obj.get("label") or obj.get("class") or "").lower()
-            object_labels.append(label)
-            if label in OBJECT_TO_CHECK_TYPE:
-                triggered_check_types.add(OBJECT_TO_CHECK_TYPE[label])
+        for frame in state.get("frames", []):
+            objects = frame.get("objects_detected", [])
+            if not objects:
+                continue
 
-        # Also add face detection if faces_detected > 0
-        if frame.get("faces_detected", 0) > 0:
-            triggered_check_types.add("visual_face_detection")
+            # Determine which check_types are triggered by detected objects
+            triggered_check_types = set()
+            object_labels = []
+            for obj in objects:
+                label = (obj.get("label") or obj.get("class") or "").lower()
+                object_labels.append(label)
+                if label in OBJECT_TO_CHECK_TYPE:
+                    triggered_check_types.add(OBJECT_TO_CHECK_TYPE[label])
 
-        for check_type in triggered_check_types:
-            rules = get_rules_by_check_type(check_type)
-            for rule in rules:
-                finding = _make_finding(
-                    rule=rule,
-                    frame_data=frame,
-                    check_type=check_type,
-                    source="visual_check",
-                )
-                findings.append(finding)
+            # Also add face detection if faces_detected > 0
+            if frame.get("faces_detected", 0) > 0:
+                triggered_check_types.add("visual_face_detection")
 
-                audit.append(_make_audit_entry(
-                    step="visual_check",
-                    action=f"Frame {frame['frame_number']} at {frame['timestamp']:.1f}s: {check_type} -> triggered rule {rule.rule_id}",
-                    input_data={"frame_number": frame["frame_number"], "objects": object_labels, "check_type": check_type},
-                    output_data={"rule_id": rule.rule_id, "severity": rule.severity},
-                    rule_id=rule.rule_id,
-                ))
+            for check_type in triggered_check_types:
+                rules = visual_rules_by_check_type.get(check_type, [])
+                for rule in rules:
+                    finding = _make_finding(
+                        rule=rule,
+                        frame_data=frame,
+                        check_type=check_type,
+                        source="visual_check",
+                    )
+                    findings.append(finding)
+
+                    audit.append(_make_audit_entry(
+                        step="visual_check",
+                        action=f"Frame {frame['frame_number']} at {frame['timestamp']:.1f}s: {check_type} -> triggered rule {rule.rule_id}",
+                        input_data={"frame_number": frame["frame_number"], "objects": object_labels, "check_type": check_type},
+                        output_data={"rule_id": rule.rule_id, "severity": rule.severity},
+                        rule_id=rule.rule_id,
+                    ))
+
+    except Exception as e:
+        import traceback
+        errors.append(f"VISUAL_CHECK_ERROR: {e}")
+        audit.append(_make_audit_entry(
+            step="visual_check",
+            action=f"Visual rule check failed: {e}\n{traceback.format_exc()}",
+            success=False,
+            error=str(e),
+        ))
+        logger.error("check_visual_rules crashed: %s", e, exc_info=True)
 
     duration_ms = int((time.time() - t0) * 1000)
     audit.append(_make_audit_entry(
@@ -259,7 +247,7 @@ def check_visual_rules(state: ComplianceState) -> ComplianceState:
         duration_ms=duration_ms,
     ))
 
-    return {**state, "visual_findings": findings, "audit_entries": audit}
+    return {**state, "visual_findings": findings, "audit_entries": audit, "errors": errors}
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +268,13 @@ def check_ocr_rules(state: ComplianceState) -> ComplianceState:
     # data quality failure, not a clean bill of health.
     frames_with_text = sum(1 for f in frames if f.get("ocr_text", "").strip())
     ocr_was_blind = len(frames) > 0 and frames_with_text == 0
+    # Partial OCR failure: engine initialized but could only read <10% of frames.
+    # Not fully blind, but coverage is too low to trust the result.
+    ocr_partially_blind = (
+        not ocr_was_blind
+        and len(frames) >= 10
+        and frames_with_text / len(frames) < 0.10
+    )
 
     if ocr_was_blind:
         warning_msg = (
@@ -296,47 +291,78 @@ def check_ocr_rules(state: ComplianceState) -> ComplianceState:
             success=False,
             error="OCR engine non-functional — visual PII unverified",
         ))
-    else:
+    elif ocr_partially_blind:
+        pct = int(100 * frames_with_text / len(frames))
+        warning_msg = (
+            f"OCR_WARNING: OCR engine only read text from {frames_with_text}/{len(frames)} frames ({pct}%). "
+            "Low OCR coverage means most on-screen PII (phone numbers, PAN, Aadhaar) may be undetected. "
+            "Re-process the video with EasyOCR fully initialised for reliable compliance coverage."
+        )
+        errors.append(warning_msg)
+        audit.append(_make_audit_entry(
+            step="ocr_check",
+            action=warning_msg,
+            output_data={"frames_checked": len(frames), "frames_with_text": frames_with_text, "coverage_pct": pct},
+            success=False,
+            error=f"Low OCR coverage ({pct}%) — PII detection unreliable",
+        ))
+    if not ocr_was_blind:
+        pii_rules = get_rules_by_check_type("ocr_pii_detection")
+        ocr_text_rules = get_rules_by_check_type("ocr_text_detection")
+        gst_rules = get_rules_by_check_type("gst_detection")
+
         for frame in frames:
             ocr_text = frame.get("ocr_text", "")
             if not ocr_text or not ocr_text.strip():
                 continue
 
+            # --- PII detection (personal data under DPDPA) ---
             pii_found = _detect_pii_in_text(ocr_text)
-            if not pii_found:
-                continue
+            if pii_found:
+                for rule in pii_rules:
+                    findings.append(_make_finding(
+                        rule=rule,
+                        frame_data=frame,
+                        pii_found=pii_found,
+                        check_type="ocr_pii_detection",
+                        source="ocr_check",
+                    ))
+                    audit.append(_make_audit_entry(
+                        step="ocr_check",
+                        action=f"Frame {frame['frame_number']} at {frame['timestamp']:.1f}s: PII found in OCR text -> triggered rule {rule.rule_id}",
+                        input_data={"frame_number": frame["frame_number"], "pii_types": [p["type"] for p in pii_found]},
+                        output_data={"rule_id": rule.rule_id, "pii_count": len(pii_found)},
+                        rule_id=rule.rule_id,
+                    ))
 
-            # PII visible in frames -> ocr_pii_detection check type
-            rules = get_rules_by_check_type("ocr_pii_detection")
-            for rule in rules:
-                finding = _make_finding(
-                    rule=rule,
-                    frame_data=frame,
-                    pii_found=pii_found,
-                    check_type="ocr_pii_detection",
-                    source="ocr_check",
-                )
-                findings.append(finding)
+                # OCR text present (non-PII check) -> ocr_text_detection
+                for rule in ocr_text_rules:
+                    findings.append(_make_finding(
+                        rule=rule,
+                        frame_data=frame,
+                        pii_found=pii_found,
+                        check_type="ocr_text_detection",
+                        source="ocr_check",
+                    ))
 
-                audit.append(_make_audit_entry(
-                    step="ocr_check",
-                    action=f"Frame {frame['frame_number']} at {frame['timestamp']:.1f}s: PII found in OCR text -> triggered rule {rule.rule_id}",
-                    input_data={"frame_number": frame["frame_number"], "pii_types": [p["type"] for p in pii_found]},
-                    output_data={"rule_id": rule.rule_id, "pii_count": len(pii_found)},
-                    rule_id=rule.rule_id,
-                ))
-
-            # OCR text itself (non-PII) -> ocr_text_detection
-            ocr_text_rules = get_rules_by_check_type("ocr_text_detection")
-            for rule in ocr_text_rules:
-                finding = _make_finding(
-                    rule=rule,
-                    frame_data=frame,
-                    pii_found=pii_found,
-                    check_type="ocr_text_detection",
-                    source="ocr_check",
-                )
-                findings.append(finding)
+            # --- GST detection (business identifier, separate rule DPDPA-VID-005) ---
+            gst_matches = _detect_gst_in_text(ocr_text)
+            if gst_matches and gst_rules:
+                for rule in gst_rules:
+                    findings.append(_make_finding(
+                        rule=rule,
+                        frame_data=frame,
+                        pii_found=[{"type": "gst", "redacted": True} for _ in gst_matches],
+                        check_type="gst_detection",
+                        source="ocr_check",
+                    ))
+                    audit.append(_make_audit_entry(
+                        step="ocr_check",
+                        action=f"Frame {frame['frame_number']} at {frame['timestamp']:.1f}s: {len(gst_matches)} GST number(s) detected -> triggered rule {rule.rule_id}",
+                        input_data={"frame_number": frame["frame_number"], "gst_count": len(gst_matches)},
+                        output_data={"rule_id": rule.rule_id, "severity": rule.severity},
+                        rule_id=rule.rule_id,
+                    ))
 
     duration_ms = int((time.time() - t0) * 1000)
     audit.append(_make_audit_entry(
@@ -357,45 +383,55 @@ def check_audio_rules(state: ComplianceState) -> ComplianceState:
     """Scan transcription segments for PII and map to audio rules."""
     t0 = time.time()
     audit = list(state.get("audit_entries", []))
+    errors = list(state.get("errors", []))
     findings = []
+    skipped = 0
 
     for segment in state.get("transcripts", []):
-        text = segment.get("text", "")
-        if not text:
-            continue
+        try:
+            text = segment.get("text", "")
+            if not text:
+                skipped += 1
+                continue
 
-        pii_found = _detect_pii_in_text(text)
-        if not pii_found:
-            continue
+            pii_found = _detect_pii_in_text(text)
+            if not pii_found:
+                continue
 
-        rules = get_rules_by_check_type("audio_pii_detection")
-        for rule in rules:
-            finding = _make_finding(
-                rule=rule,
-                transcript_data=segment,
-                pii_found=pii_found,
-                check_type="audio_pii_detection",
-                source="audio_check",
-            )
-            findings.append(finding)
+            rules = get_rules_by_check_type("audio_pii_detection")
+            for rule in rules:
+                finding = _make_finding(
+                    rule=rule,
+                    transcript_data=segment,
+                    pii_found=pii_found,
+                    check_type="audio_pii_detection",
+                    source="audio_check",
+                )
+                findings.append(finding)
 
-            audit.append(_make_audit_entry(
-                step="audio_check",
-                action=f"Audio at {segment['start_time']:.1f}s-{segment['end_time']:.1f}s: PII found in transcript -> triggered rule {rule.rule_id}",
-                input_data={"start_time": segment["start_time"], "pii_types": [p["type"] for p in pii_found]},
-                output_data={"rule_id": rule.rule_id},
-                rule_id=rule.rule_id,
-            ))
+                audit.append(_make_audit_entry(
+                    step="audio_check",
+                    action=f"Audio at {segment['start_time']:.1f}s-{segment['end_time']:.1f}s: PII found in transcript -> triggered rule {rule.rule_id}",
+                    input_data={"start_time": segment["start_time"], "pii_types": [p["type"] for p in pii_found]},
+                    output_data={"rule_id": rule.rule_id},
+                    rule_id=rule.rule_id,
+                ))
+        except Exception as e:
+            errors.append(f"AUDIO_SEGMENT_ERROR: {e}")
+            logger.warning("check_audio_rules: error on segment: %s", e, exc_info=True)
+
+    if skipped:
+        logger.debug("check_audio_rules: %d segments skipped (empty text)", skipped)
 
     duration_ms = int((time.time() - t0) * 1000)
     audit.append(_make_audit_entry(
         step="audio_check",
-        action=f"Audio rule check complete: {len(findings)} potential violations from {len(state.get('transcripts', []))} segments",
-        output_data={"findings_count": len(findings)},
+        action=f"Audio rule check complete: {len(findings)} potential violations from {len(state.get('transcripts', []))} segments ({skipped} empty skipped)",
+        output_data={"findings_count": len(findings), "skipped": skipped},
         duration_ms=duration_ms,
     ))
 
-    return {**state, "audio_findings": findings, "audit_entries": audit}
+    return {**state, "audio_findings": findings, "audit_entries": audit, "errors": errors}
 
 
 # ---------------------------------------------------------------------------
@@ -422,30 +458,17 @@ def check_metadata_rules(state: ComplianceState) -> ComplianceState:
                     if age_days > 90:
                         rules = get_rules_by_check_type("data_retention")
                         for rule in rules:
-                            findings.append({
-                                "id": str(uuid.uuid4()),
-                                "rule_id": rule.rule_id,
-                                "rule_name": rule.name,
-                                "section_ref": rule.section_ref,
-                                "category": rule.category,
-                                "severity": rule.severity,
-                                "requirement_text": rule.requirement_text,
-                                "violation_condition": rule.violation_condition,
-                                "penalty_ref": rule.penalty_ref,
-                                "check_type": "data_retention",
-                                "frame_number": None,
-                                "timestamp": None,
-                                "objects_detected": [],
-                                "pii_found": [],
-                                "ocr_text": "",
-                                "transcript_text": "",
-                                "similarity_score": 1.0,
-                                "source": "metadata_check",
-                                "description": f"Video is {age_days} days old, exceeding the 90-day CCTV retention limit.",
-                                "recommendation": rule.detection_guidance,
-                            })
+                            finding = _make_finding(
+                                rule=rule,
+                                check_type="data_retention",
+                                source="metadata_check",
+                            )
+                            finding["description"] = (
+                                f"Video is {age_days} days old, exceeding the 90-day CCTV retention limit."
+                            )
+                            findings.append(finding)
                             audit.append(_make_audit_entry(
-                                step="visual_check",
+                                step="rule_match",
                                 action=f"Video age {age_days} days exceeds 90-day CCTV retention limit -> triggered rule {rule.rule_id}",
                                 input_data={"video_age_days": age_days},
                                 output_data={"rule_id": rule.rule_id},
@@ -455,7 +478,7 @@ def check_metadata_rules(state: ComplianceState) -> ComplianceState:
             db.close()
     except Exception as e:
         audit.append(_make_audit_entry(
-            step="visual_check",
+            step="rule_match",
             action=f"Metadata check failed: {e}",
             success=False,
             error=str(e),
@@ -463,7 +486,7 @@ def check_metadata_rules(state: ComplianceState) -> ComplianceState:
 
     duration_ms = int((time.time() - t0) * 1000)
     audit.append(_make_audit_entry(
-        step="visual_check",
+        step="finding_created",
         action=f"Metadata rule check complete: {len(findings)} potential violations",
         output_data={"findings_count": len(findings)},
         duration_ms=duration_ms,
@@ -483,6 +506,7 @@ def semantic_enrich(state: ComplianceState) -> ComplianceState:
     """
     t0 = time.time()
     audit = list(state.get("audit_entries", []))
+    errors = list(state.get("errors", []))
     extra_findings = []
 
     # Build a set of rule_ids already found to avoid duplicates
@@ -508,7 +532,7 @@ def semantic_enrich(state: ComplianceState) -> ComplianceState:
 
         for frame in query_frames:
             objects = frame.get("objects_detected", [])
-            obj_labels = [o.get("label", "") for o in objects if isinstance(o, dict)]
+            obj_labels = [o.get("class", o.get("label", "")) for o in objects if isinstance(o, dict)]
             query_text = (
                 f"Person detected in video frame at {frame['timestamp']:.1f}s. "
                 f"Objects: {', '.join(obj_labels)}. OCR text: {frame.get('ocr_text', '')[:200]}"
@@ -549,12 +573,14 @@ def semantic_enrich(state: ComplianceState) -> ComplianceState:
                 ))
 
     except Exception as e:
+        errors.append(f"SEMANTIC_ERROR: {e}")
         audit.append(_make_audit_entry(
             step="rule_match",
             action=f"Semantic enrichment failed: {e}",
             success=False,
             error=str(e),
         ))
+        logger.warning("semantic_enrich failed: %s", e, exc_info=True)
 
     duration_ms = int((time.time() - t0) * 1000)
     audit.append(_make_audit_entry(
@@ -566,7 +592,7 @@ def semantic_enrich(state: ComplianceState) -> ComplianceState:
 
     # Merge extra findings into the appropriate list
     return {**state, "visual_findings": state.get("visual_findings", []) + extra_findings,
-            "audit_entries": audit}
+            "audit_entries": audit, "errors": errors}
 
 
 # ---------------------------------------------------------------------------
@@ -623,17 +649,39 @@ def generate_report(state: ComplianceState) -> ComplianceState:
     """
     t0 = time.time()
     audit = list(state.get("audit_entries", []))
+    errors = list(state.get("errors", []))
     findings = state.get("all_findings", [])
 
-    all_rules = get_all_rules()
+    try:
+        all_rules = get_all_rules()
+    except Exception as e:
+        errors.append(f"REPORT_ERROR: could not load rules: {e}")
+        logger.error("generate_report: get_all_rules() failed: %s", e, exc_info=True)
+        all_rules = []
     total_checks = len(all_rules)
-    failed_checks = len(set(f["rule_id"] for f in findings))
-    passed_checks = total_checks - failed_checks
-    critical_violations = sum(1 for f in findings if f.get("severity") == "critical")
-    warnings = sum(1 for f in findings if f.get("severity") == "warning")
 
-    # Score: 100 - (failed_critical * 5) - (failed_warning * 2) - (failed_info * 1), floor 0
-    penalty = (critical_violations * 5) + (warnings * 2) + (failed_checks - critical_violations - warnings)
+    # Count UNIQUE rules violated per severity (not total findings)
+    # e.g. phone number in 30 frames = 1 critical rule = -5 pts, not -150
+    violated_rule_ids = set(f["rule_id"] for f in findings)
+    failed_checks = len(violated_rule_ids)
+    passed_checks = total_checks - failed_checks
+
+    severity_by_rule = {}
+    for f in findings:
+        rule_id = f["rule_id"]
+        # Most severe finding wins if same rule appears multiple times
+        existing = severity_by_rule.get(rule_id, "info")
+        sev = f.get("severity", "info")
+        if sev == "critical" or (sev == "warning" and existing == "info"):
+            severity_by_rule[rule_id] = sev
+
+    critical_violations = sum(1 for s in severity_by_rule.values() if s == "critical")
+    warnings = sum(1 for s in severity_by_rule.values() if s == "warning")
+    info_violations = sum(1 for s in severity_by_rule.values() if s == "info")
+
+    # Score: each unique violated rule deducts points based on its severity
+    # critical rule = -5, warning rule = -2, info rule = -1
+    penalty = (critical_violations * 5) + (warnings * 2) + info_violations
     compliance_score = max(0.0, 100.0 - penalty)
 
     if failed_checks == 0:
@@ -676,7 +724,7 @@ def generate_report(state: ComplianceState) -> ComplianceState:
         duration_ms=duration_ms,
     ))
 
-    return {**state, "report_data": report_data, "audit_entries": audit}
+    return {**state, "report_data": report_data, "audit_entries": audit, "errors": errors}
 
 
 # ---------------------------------------------------------------------------
@@ -730,19 +778,31 @@ def save_to_db(state: ComplianceState) -> ComplianceState:
             report.warnings = report_data.get("warnings", 0)
             report.completed_at = datetime.utcnow()
             report.executive_summary = "Compliance check complete. LLM narrative summary generating in background."
+            report.recommendations = report_data.get("limitations") or []
             db.flush()
             report_id = report.id
 
+            # Pre-fetch all needed guidelines in one query (avoids N+1)
+            all_findings_list = state.get("all_findings", [])
+            rule_ids_needed = {f["rule_id"] for f in all_findings_list}
+            guidelines_by_rule_id = {
+                g.name: g
+                for g in db.query(Guideline).filter(Guideline.name.in_(rule_ids_needed)).all()
+            }
+
             # Write ComplianceFinding rows
             severity_map = {"critical": "critical", "warning": "warning", "info": "info"}
-            for finding in state.get("all_findings", []):
-                # Find the guideline by rule_id — stored in Guideline.name
-                guideline = db.query(Guideline).filter(
-                    Guideline.name == finding["rule_id"]
-                ).first()
+            for finding in all_findings_list:
+                guideline = guidelines_by_rule_id.get(finding["rule_id"])
 
                 if not guideline:
-                    continue  # Skip if guideline not in PostgreSQL
+                    logger.warning(
+                        "save_to_db: guideline '%s' not found in PostgreSQL — finding dropped. "
+                        "Run POST /api/v1/compliance/guidelines/reload to sync rules.",
+                        finding["rule_id"],
+                    )
+                    errors.append(f"GUIDELINE_MISSING: {finding['rule_id']} not in DB — finding not saved")
+                    continue
 
                 db_finding = ComplianceFinding(
                     report_id=report_id,

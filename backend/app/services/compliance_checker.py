@@ -84,6 +84,19 @@ def get_report_summary(report_id: str) -> Optional[dict]:
             ComplianceFinding.report_id == report_id
         ).all()
 
+        limitations = report.recommendations or []
+        ocr_limitation = any("OCR" in str(l) or "ocr" in str(l) for l in limitations)
+        data_quality = {
+            "ocr_verified": not ocr_limitation,
+            "score_reliable": not ocr_limitation,
+            "limitations": limitations,
+            "warning": (
+                "Compliance score may be understated — OCR was unavailable during processing. "
+                "Text-based PII (PAN, Aadhaar, phone numbers visible on screen) was not checked. "
+                "Re-process the video to get a verified score."
+            ) if ocr_limitation else None,
+        }
+
         return {
             "report_id": report.id,
             "video_id": report.video_id,
@@ -95,7 +108,8 @@ def get_report_summary(report_id: str) -> Optional[dict]:
             "critical_violations": report.critical_violations,
             "warnings": report.warnings,
             "executive_summary": report.executive_summary,
-            "recommendations": report.recommendations,
+            "recommendations": limitations,
+            "data_quality": data_quality,
             "created_at": report.created_at.isoformat() if report.created_at else None,
             "completed_at": report.completed_at.isoformat() if report.completed_at else None,
             "findings": [

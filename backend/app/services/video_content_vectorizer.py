@@ -118,7 +118,8 @@ class VideoContentVectorizer:
 
                 # Step 3: Process frames (OCR + Visual Analysis)
                 ocr_info = self.ocr_service.get_reader_info()
-                if not ocr_info.get("can_read_text"):
+                ocr_can_read = ocr_info.get("can_read_text", False)
+                if not ocr_can_read:
                     logger.warning(
                         "⚠️  OCR engine '%s' cannot read text. Visual PII (phone numbers, "
                         "Aadhaar, PAN visible on screen) will NOT be detected. "
@@ -130,7 +131,8 @@ class VideoContentVectorizer:
                 logger.info("Step 3: Analyzing frames...")
                 frame_data = self._process_frames(
                     frames,
-                    process_ocr=process_ocr
+                    process_ocr=process_ocr,
+                    ocr_can_read=ocr_can_read,
                 )
 
                 # Step 4: Create embeddings and store in vector DB
@@ -153,7 +155,8 @@ class VideoContentVectorizer:
     def _process_frames(
         self,
         frames: List,
-        process_ocr: bool = True
+        process_ocr: bool = True,
+        ocr_can_read: bool = True,
     ) -> List[Dict]:
         """
         Process extracted frames with OCR and visual analysis.
@@ -166,6 +169,7 @@ class VideoContentVectorizer:
             List of frame data dictionaries
         """
         frame_data = []
+        dropped = 0
 
         for i, frame in enumerate(frames):
             logger.debug(f"Processing frame {i+1}/{len(frames)}")
@@ -191,14 +195,23 @@ class VideoContentVectorizer:
                         for obj in detected_objects
                     ],
                     "ocr_text": ocr_text,
+                    "ocr_readable": ocr_can_read,  # False when engine is in fallback mode
                     "has_persons": person_count > 0,
                     "persons_count": person_count,
                     "total_objects": len(detected_objects),
                 })
 
             except Exception as e:
-                logger.error(f"Error processing frame {frame.frame_number}: {e}")
+                dropped += 1
+                logger.error(f"Error processing frame {frame.frame_number}: {e}", exc_info=True)
                 continue
+
+        if dropped:
+            pct = dropped / len(frames) * 100 if frames else 0
+            logger.warning(
+                "_process_frames: %d/%d frames dropped due to errors (%.0f%% coverage loss)",
+                dropped, len(frames), pct,
+            )
 
         return frame_data
 
@@ -219,28 +232,24 @@ class VideoContentVectorizer:
         Returns:
             Number of vectors stored
         """
+        # Build items and collect texts for batch embedding
         items_to_store = []
+        texts_to_embed = []
 
-        # Process frame data
         for frame in frame_data:
-            # Create text description — embedding function expects class name strings
             text_description = create_frame_description(
                 frame_number=frame["frame_number"],
                 timestamp=frame["timestamp"],
                 objects_detected=[o["class"] for o in frame["objects_detected"]],
                 ocr_text=frame["ocr_text"]
             )
-
-            # Generate embedding
-            embedding = self.embedding_service.embed(text_description)
-
-            # Prepare for storage
+            texts_to_embed.append(text_description)
             items_to_store.append({
                 "video_id": video_id,
                 "content_type": "frame",
                 "timestamp": frame["timestamp"],
                 "text": text_description,
-                "embedding": embedding,
+                "embedding": None,  # filled after batch embed
                 "frame_number": frame["frame_number"],
                 "frame_url": "",  # TODO: Upload to MinIO and add URL
                 "metadata": {
@@ -250,49 +259,56 @@ class VideoContentVectorizer:
                 }
             })
 
-        # Process transcription segments
         for segment in transcription_segments:
-            # Create text description
             text_description = create_transcription_description(
                 start_time=segment.start,
                 end_time=segment.end,
                 text=segment.text
             )
-
-            # Generate embedding
-            embedding = self.embedding_service.embed(text_description)
-
-            # Prepare for storage
+            texts_to_embed.append(text_description)
             items_to_store.append({
                 "video_id": video_id,
                 "content_type": "transcription",
                 "timestamp": segment.start,
                 "text": text_description,
-                "embedding": embedding,
+                "embedding": None,  # filled after batch embed
                 "metadata": {
                     "duration": segment.end - segment.start,
                     "confidence": segment.confidence
                 }
             })
 
+        # Single batch embed call for all items
+        try:
+            embeddings = self.embedding_service.embed_batch(texts_to_embed)
+            for item, embedding in zip(items_to_store, embeddings):
+                item["embedding"] = embedding
+        except Exception as e:
+            logger.error("embed_batch failed — vector store will not be updated: %s", e, exc_info=True)
+            # Embeddings unavailable; compliance pipeline uses PostgreSQL directly so this is non-fatal
+            items_to_store = []
+
         # Batch insert to vector store
-        logger.info(f"Storing {len(items_to_store)} embeddings in vector database")
-        self.vector_store.add_video_content_batch(items_to_store)
+        if items_to_store:
+            try:
+                logger.info(f"Storing {len(items_to_store)} embeddings in vector database")
+                self.vector_store.add_video_content_batch(items_to_store)
+            except Exception as e:
+                logger.error("Weaviate batch insert failed — semantic enrichment will be skipped: %s", e, exc_info=True)
 
         # Persist frame analyses and transcription segments to PostgreSQL
         db = SessionLocal()
         try:
             for frame in frame_data:
-                objects = frame["objects_detected"]
                 db.add(FrameAnalysis(
                     video_id=video_id,
                     frame_number=frame["frame_number"],
                     timestamp=frame["timestamp"],
-                    objects_detected=[{"class": obj, "confidence": 1.0} for obj in objects] if objects else [],
-                    persons_detected=1 if frame.get("has_persons") else 0,
+                    objects_detected=frame["objects_detected"],
+                    persons_detected=frame.get("persons_count", 0),
                     ocr_text=frame.get("ocr_text", ""),
                     visual_analysis_completed=True,
-                    ocr_completed=True,
+                    ocr_completed=frame.get("ocr_readable", True),
                     vectorized=True,
                 ))
             for segment in transcription_segments:

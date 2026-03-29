@@ -1,24 +1,275 @@
-Terminal 1 — API Server
+DPDPA Video Compliance Pipeline — Setup & Usage Guide
+======================================================
 
-.\start.ps1 api
+This guide is for anyone setting up the project on a new machine.
 
-Terminal 2 — Celery Worker
 
-.\start.ps1 docker
+══════════════════════════════════════════════════════
+SECTION 1 — PREREQUISITES (install once)
+══════════════════════════════════════════════════════
 
-.\start.ps1 worker
+1. Python 3.11
+   Download: https://www.python.org/downloads/
+   Tick "Add Python to PATH" during install.
 
-Terminal 3 — Submit video + poll status
+2. Docker Desktop
+   Download: https://www.docker.com/products/docker-desktop/
+   Start Docker Desktop before running the pipeline.
 
-$result = Invoke-RestMethod -Uri "http://localhost:8000/api/v1/videos/upload" `  -Method POST`
--ContentType "application/json" `
--Body '{"video_path": "C:/Users/mailt/OneDrive/Desktop/testvideo/WhatsApp Video 2026-02-15 at 2.47.57 PM.mp4"}'
+3. Git
+   Download: https://git-scm.com/downloads
 
+4. FFmpeg (required for video processing)
+   From the project root in PowerShell:
+   .\install_ffmpeg.ps1
+
+
+══════════════════════════════════════════════════════
+SECTION 2 — FIRST-TIME SETUP (run once after cloning)
+══════════════════════════════════════════════════════
+
+All commands run from the project root folder in PowerShell.
+
+Step 1 — Start Docker containers
+
+    .\start.ps1 docker
+
+    Wait ~30 seconds. Verify all containers are running:
+    docker ps
+
+    Expected: postgres, redis, minio, weaviate, ollama, flower all show "Up"
+
+Step 2 — Create your .env file
+
+    copy backend\.env.example backend\.env
+
+    No edits needed for local development — the defaults work with Docker.
+
+Step 3 — Create Python virtual environment
+
+    python -m venv .venv
+    .\.venv\Scripts\Activate.ps1
+
+    (Your prompt will show (.venv) when active)
+
+Step 4 — Install Python dependencies
+
+    pip install -r backend\requirements-minimal.txt
+
+    This takes 5-15 minutes the first time (downloads AI models ~2 GB).
+
+Step 4b — Pull LLaVA vision model for OCR (one-time, ~4 GB download)
+
+    docker exec -it regtech_ollama ollama pull llava:7b
+
+    This enables vision-language OCR for PII detection (PAN cards, Aadhaar, phone numbers)
+    on video frames. LLaVA is a multimodal model that handles motion blur, overlays,
+    and varied lighting better than traditional OCR engines.
+
+    NOTE: LLaVA runs on CPU by default (~2-3 min per frame). For production use a
+    GPU-enabled host. On CPU the pipeline will be slow for long videos.
+
+    If you skip this step, the pipeline falls back to EasyOCR automatically.
+    You can pull the model later and set OLLAMA_OCR_MODEL=llava:7b in backend/.env,
+    then restart the worker — it will auto-detect it.
+
+    To disable vision OCR and use EasyOCR instead, set:
+    OLLAMA_OCR_MODEL=   (leave empty in backend/.env)
+
+Step 5 — Run database migrations
+
+    cd backend
+    alembic upgrade head
+    cd ..
+
+    This creates all PostgreSQL tables.
+
+Step 6 — Start the API server (Terminal 1)
+
+    .\start.ps1 api
+
+    Wait until you see: "Application startup complete."
+    API is available at: http://localhost:8000
+    API docs at:         http://localhost:8000/docs
+
+Step 7 — Load DPDPA compliance rules (one-time, do this while API is running)
+
+    $reloadParams = @{
+        Uri    = "http://localhost:8000/api/v1/compliance/guidelines/reload"
+        Method = "POST"
+    }
+    Invoke-RestMethod @reloadParams
+
+    Expected response: { "message": "Guidelines reload complete", "pg_inserted": 5, ... }
+
+Setup is complete.
+
+
+══════════════════════════════════════════════════════
+SECTION 3 — DAILY USAGE
+══════════════════════════════════════════════════════
+
+
+Terminal 1 — Start Docker (if not already running)
+
+    .\start.ps1 docker
+
+Terminal 2 — Start API server
+
+    .\start.ps1 api
+
+Terminal 3 — Start Celery worker (processes videos in background)
+
+    .\start.ps1 worker
+
+
+Terminal 4
+To check the health
+
+Invoke-RestMethod -Uri "http://localhost:8000/health/detailed"
+
+
+— Submit a video and run compliance check
+
+    --- Step A: Upload video ---
+  $uploadParams = @{
+    Uri         = "http://localhost:8000/api/v1/videos/upload"
+    Method      = "POST"
+    ContentType = "application/json"
+    Body        = (@{ video_path = "C:/Users/mailt/OneDrive/Desktop/testvideo/nevideo30march.mp4" } | ConvertTo-Json)
+}
+$result = Invoke-RestMethod @uploadParams
 $result
-Then poll until status is completed:
+$videoId = $result.video_id
 
-Invoke-RestMethod -Uri "http://localhost:8000/api/v1/videos/$($result.video_id)/status"
+    Replace the video_path with the actual path to your video file.
 
-Then fetch the full report:
+    IMPORTANT — Path format in JSON:
+    Always use FORWARD SLASHES (/) in the video_path, not backslashes (\).
+    Windows accepts both, but JSON treats backslash as an escape character.
 
-Invoke-RestMethod -Uri "http://localhost:8000/api/v1/compliance/report/$($result.video_id)"
+    CORRECT:   "C:/Users/mailt/Desktop/video.mp4"
+    INCORRECT: "C:\Users\mailt\Desktop\video.mp4"  ← causes JSON decode error
+
+    --- Step B: Poll until processing is complete ---
+    Invoke-RestMethod -Uri "http://localhost:8000/api/v1/videos/$videoId/status"
+
+    Repeat until status = "completed" (takes 2-5 minutes).
+
+    The response now includes a pipeline_stages breakdown, e.g.:
+    {
+      "status": "completed",
+      "pipeline_stages": {
+        "frame_extraction": { "status": "completed", "frames": 50 },
+        "ocr":              { "status": "completed", "engine": "easyocr",
+                              "frames_with_text": 12, "ocr_coverage_pct": 24.0 },
+        "visual":           { "status": "completed", "persons_detected": 3 },
+        "transcription":    { "status": "completed", "segments": 8 }
+      }
+    }
+
+    If ocr.status = "degraded" or ocr_coverage_pct = 0, OCR failed and
+    PII text was not checked. See Troubleshooting section.
+
+    --- Step C: Run DPDPA compliance check ---
+    $checkParams = @{
+        Uri    = "http://localhost:8000/api/v1/compliance/check/$videoId"
+        Method = "POST"
+    }
+    Invoke-RestMethod @checkParams
+
+    --- Step D: Fetch the full compliance report ---
+    Invoke-RestMethod -Uri "http://localhost:8000/api/v1/compliance/report/$videoId"
+
+    The report shows: compliance score, status, all violations found, evidence, and recommendations.
+
+    IMPORTANT — Check data_quality before trusting the score:
+    {
+      "data_quality": {
+        "ocr_verified": true,
+        "score_reliable": true,
+        "limitations": [],
+        "warning": null
+      }
+    }
+
+    If ocr_verified = false or score_reliable = false, OCR was unavailable during
+    analysis. The score may be falsely high — text-based PII (Aadhaar, PAN, phone
+    numbers shown on screen) was NOT checked. Fix OCR and re-run the compliance check.
+
+
+══════════════════════════════════════════════════════
+SECTION 4 — USEFUL COMMANDS
+══════════════════════════════════════════════════════
+
+Re-process a video from scratch (wipes old data):
+    Body = '{"video_path": "...", "force": true}'
+
+Reload DPDPA rules after code changes:
+    Invoke-RestMethod -Uri "http://localhost:8000/api/v1/compliance/guidelines/reload" -Method POST
+
+Check Docker container health:
+    docker ps
+
+Restart a specific container (e.g. weaviate):
+    docker restart regtech_weaviate
+
+View API documentation (Swagger UI):
+    http://localhost:8000/docs
+
+View MinIO storage console:
+    http://localhost:9001   (login: minioadmin / minioadmin)
+
+View Celery task monitor (Flower):
+    http://localhost:5555
+    Shows all tasks: pending, running, completed, failed, retry count, timing.
+    Use this to debug stuck or slow videos in real time.
+
+View full audit trail for a compliance report:
+    Invoke-RestMethod -Uri "http://localhost:8000/api/v1/compliance/audit/$reportId"
+    Returns every step the compliance pipeline executed — what it checked, what it found,
+    and whether each step succeeded or failed.
+
+
+══════════════════════════════════════════════════════
+SECTION 5 — TROUBLESHOOTING
+══════════════════════════════════════════════════════
+
+"Connection refused" on port 8000
+    → API server is not running. Run: .\start.ps1 api
+
+"Connection refused" on port 5433 / 8080 / 6379
+    → Docker containers not running. Run: .\start.ps1 docker
+
+Weaviate shows "unhealthy" in Docker Desktop
+    → It sometimes takes 60-90 seconds after start. Wait, then retry.
+    → If still unhealthy: docker restart regtech_weaviate
+
+Video stuck in "processing" status
+    → Celery worker is not running. Open a new terminal and run: .\start.ps1 worker
+
+Pipeline returns 100/100 COMPLIANT with no findings
+    → Check data_quality.ocr_verified in the report response.
+    → If false: OCR failed silently — text-based PII was not checked.
+    → Also check pipeline_stages.ocr.status in the video status response.
+    → Fix options:
+       a) EasyOCR active: restart the Celery worker and re-upload with force=true
+       b) LLaVA active but slow: check Flower (http://localhost:5555) to see if task
+          is still running vs failed
+       c) LLaVA timed out: set OLLAMA_OCR_MODEL= in backend/.env to fall back to EasyOCR
+    → After fixing: re-upload with force=true and re-run the compliance check.
+
+OCR engine shows wrong model / OLLAMA_OCR_MODEL not being read
+    → The Celery worker caches settings at startup.
+    → After any change to backend/.env, restart the worker: .\\start.ps1 worker
+    → Also ensure you are running start.ps1 from the project ROOT (not from backend/).
+
+Task stuck in Flower / never completes
+    → Open http://localhost:5555 → check Active/Reserved tabs for the task.
+    → If task shows "RETRY": a transient error occurred. Worker will retry up to 2 times.
+    → If task shows "FAILURE": check the traceback in Flower for root cause.
+    → Common causes: Weaviate not ready, Redis disconnected, out-of-memory on large video.
+
+"video_id already exists" error on upload
+    → Video was already uploaded. Either use a different video or re-process:
+    Body = '{"video_path": "...", "force": true}'

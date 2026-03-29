@@ -8,6 +8,7 @@ Endpoints:
   GET  /api/v1/compliance/audit/{report_id}     — Full audit trail for a report
   GET  /api/v1/compliance/findings/{report_id}  — All findings with evidence
   POST /api/v1/compliance/purge/{video_id}      — Purge raw data after report complete
+  POST /api/v1/compliance/guidelines/reload     — Sync latest DPDPA rules into PostgreSQL + Weaviate
 """
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
@@ -169,3 +170,29 @@ async def purge_video_data(video_id: str, report_id: str = Query(..., descriptio
 async def check_purge_status(video_id: str):
     """Returns whether raw data (frame_analyses, transcription_segments) still exists for a video."""
     return get_purge_status(video_id)
+
+
+@router.post("/guidelines/reload", summary="Sync latest DPDPA rules into PostgreSQL and Weaviate")
+async def reload_guidelines(clear_existing: bool = Query(False, description="Wipe and re-insert all rules (use when rule definitions changed)")):
+    """
+    Upsert DPDPA rule definitions from definitions.py into PostgreSQL and Weaviate.
+
+    - Default (clear_existing=false): only inserts rules that do not yet exist — safe to call
+      at any time, e.g. after adding a new rule like DPDPA-VID-005.
+    - clear_existing=true: drops all existing DPDPA rules and reloads from scratch — use when
+      existing rule text/severity has changed and must be updated.
+
+    Returns stats: total rules, newly inserted, skipped, errors.
+    """
+    try:
+        from app.services.guideline_loader import GuidelineLoader
+        loader = GuidelineLoader()
+        stats = loader.load_all_rules(clear_existing=clear_existing)
+        loader.close()
+        return {
+            "message": "Guidelines reload complete",
+            "clear_existing": clear_existing,
+            **stats,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Guidelines reload failed: {e}")

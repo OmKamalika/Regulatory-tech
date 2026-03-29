@@ -93,7 +93,23 @@
       "Bash(cut -d'>' -f1)",
       "Bash(cut -d'<' -f1)",
       "Bash(powershell.exe -Command \"Get-Content ''C:\\\\Users\\\\mailt\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-mailt-OneDrive-Desktop-Regtech\\\\tasks\\\\bi2wm1ibl.output''\")",
-      "Bash(.venv/Scripts/pip install easyocr)"
+      "Bash(.venv/Scripts/pip install easyocr)",
+      "Bash(grep -n \"try:\" /c/Users/mailt/OneDrive/Desktop/Regtech/backend/app/services/*.py)",
+      "Bash(grep -n \"Depends\\\\|get_db\" /c/Users/mailt/OneDrive/Desktop/Regtech/backend/app/api/v1/*.py)",
+      "Bash(ls -la /c/Users/mailt/OneDrive/Desktop/Regtech/backend/*.py)",
+      "Bash(grep -n \"Unique\\\\|Index\\\\|ForeignKey\" /c/Users/mailt/OneDrive/Desktop/Regtech/backend/app/models/*.py)",
+      "Bash(grep -n \"minio_path\\\\|frame_url\" /c/Users/mailt/OneDrive/Desktop/Regtech/backend/app/models/*.py)",
+      "Bash(grep -c \"nullable=True\" /c/Users/mailt/OneDrive/Desktop/Regtech/backend/app/models/*.py)",
+      "Bash(grep \"pass\" /c/Users/mailt/OneDrive/Desktop/Regtech/backend/app/services/*.py)",
+      "Bash(grep -n \"Index\\\\|UniqueConstraint\\\\|CheckConstraint\" /c/Users/mailt/OneDrive/Desktop/Regtech/backend/app/models/*.py)",
+      "Bash(docker --version)",
+      "Bash(python3:*)",
+      "Read(//c/Users/mailt/.claude/plans/**)",
+      "Bash(grep -n \"def get_textbox\" \"c:/Users/mailt/OneDrive/Desktop/Regtech/.venv/Lib/site-packages/easyocr\"/*.py)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\mailt\\.claude\\plans",
+      "c:\\Users\\mailt\\OneDrive\\Desktop\\Regtech\\backend"
     ]
   }
 }

@@ -50,7 +50,7 @@ services:
     volumes:
       - weaviate_data:/var/lib/weaviate
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/.well-known/ready"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/v1/.well-known/ready || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -90,6 +90,16 @@ services:
       /usr/bin/mc policy set download myminio/frames;
       exit 0;
       "
+
+  # Flower — Celery task monitoring UI (http://localhost:5555)
+  flower:
+    image: mher/flower:2.0
+    container_name: regtech_flower
+    command: celery --broker=redis://redis:6379/0 flower --port=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
 
   # Ollama (for Llama 3.1)
   ollama:

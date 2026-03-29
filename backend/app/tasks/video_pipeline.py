@@ -53,7 +53,13 @@ def _ensure_ffmpeg_on_path():
 _ensure_ffmpeg_on_path()
 
 
-@celery_app.task(bind=True, name="tasks.process_video")
+@celery_app.task(
+    bind=True,
+    name="tasks.process_video",
+    autoretry_for=(ConnectionError, TimeoutError, OSError),
+    retry_kwargs={"max_retries": 2, "countdown": 30},
+    retry_backoff=True,
+)
 def process_video_task(self, video_id: str, video_path: str):
     """
     Full pipeline task: vectorize video then run compliance check.
@@ -165,6 +171,19 @@ def process_video_task(self, video_id: str, video_path: str):
                 db.commit()
         finally:
             db.close()
+
+        # Notify operator via webhook if configured
+        from app.config import settings
+        if settings.FAILURE_WEBHOOK_URL:
+            try:
+                import requests as _req
+                _req.post(
+                    settings.FAILURE_WEBHOOK_URL,
+                    json={"video_id": video_id, "error": str(e), "video_path": video_path},
+                    timeout=5,
+                )
+            except Exception as webhook_err:
+                logger.warning("Failure webhook call failed: %s", webhook_err)
 
         print("\n")
         print("=" * 62)
