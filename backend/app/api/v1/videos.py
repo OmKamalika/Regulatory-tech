@@ -2,22 +2,121 @@
 FastAPI router for video upload and status endpoints.
 
 Endpoints:
+  POST /api/v1/videos/upload-file  — Upload a video file (multipart) and trigger pipeline
   POST /api/v1/videos/upload       — Register a video by local path and trigger pipeline
   GET  /api/v1/videos/{video_id}/status — Poll processing status + compliance result
   GET  /api/v1/videos/             — List all videos
 """
+import logging
 import os
+import shutil
+import tempfile
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
 
 from app.db.session import SessionLocal
 from app.models.video import Video, VideoStatus
 from app.models.compliance_report import ComplianceReport
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "regvision_uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+@router.post("/upload-file", summary="Upload a video file and trigger full pipeline")
+async def upload_video_file(file: UploadFile = File(...)):
+    """Accepts a multipart video upload, saves to a temp dir, then runs the pipeline."""
+    logger.info("upload-file: received filename=%r content_type=%r", file.filename, file.content_type)
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided.")
+
+    ext = os.path.splitext(file.filename)[1].lstrip(".").lower()
+    allowed = {"mp4", "avi", "mov", "mkv", "webm"}
+    if ext not in allowed:
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {ext!r}. Allowed: {sorted(allowed)}")
+
+    video_id = str(uuid.uuid4())
+    dest_path = os.path.join(UPLOAD_DIR, f"{video_id}.{ext}")
+
+    try:
+        with open(dest_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+    except Exception as write_err:
+        logger.error("upload-file: failed to write file to %s — %s", dest_path, write_err, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Could not save uploaded file: {write_err}")
+
+    file_size = os.path.getsize(dest_path)
+    logger.info("upload-file: saved %s (%d bytes) → %s", file.filename, file_size, dest_path)
+
+    from app.config import settings as _settings
+    if file_size > _settings.MAX_UPLOAD_SIZE:
+        os.remove(dest_path)
+        max_gb = _settings.MAX_UPLOAD_SIZE / (1024 ** 3)
+        raise HTTPException(status_code=413, detail=f"File exceeds {max_gb:.0f} GB limit.")
+
+    db = SessionLocal()
+    try:
+        video = Video(
+            id=video_id,
+            filename=file.filename,
+            original_filename=file.filename,
+            file_size=file_size,
+            format=ext,
+            minio_path=dest_path,
+            status=VideoStatus.UPLOADED,
+            processing_progress=0,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        db.add(video)
+        db.commit()
+        logger.info("upload-file: video record created video_id=%s", video_id)
+    except Exception as db_err:
+        logger.error("upload-file: DB insert failed for video_id=%s — %s", video_id, db_err, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Database error: {db_err}")
+    finally:
+        db.close()
+
+    # Queue the pipeline task — non-fatal if Celery/Redis is down
+    task_id = None
+    pipeline_warnings = []
+    try:
+        from app.tasks.video_pipeline import process_video_task
+        task = process_video_task.delay(video_id=video_id, video_path=dest_path)
+        task_id = task.id
+        logger.info("upload-file: pipeline task queued task_id=%s for video_id=%s", task_id, video_id)
+    except Exception as celery_err:
+        logger.error(
+            "upload-file: could not queue pipeline task for video_id=%s — %s. "
+            "Is Celery worker running? Start with: celery -A app.celery_app worker --pool=solo -l info",
+            video_id, celery_err, exc_info=True,
+        )
+        pipeline_warnings.append(
+            f"Pipeline task could not be queued ({type(celery_err).__name__}: {celery_err}). "
+            "Ensure the Celery worker is running: "
+            "celery -A app.celery_app worker --pool=solo -l info"
+        )
+
+    response = {
+        "video_id": video_id,
+        "task_id": task_id,
+        "status": "queued" if task_id else "uploaded",
+        "message": (
+            "Pipeline started. Poll /api/v1/videos/{video_id}/status for progress."
+            if task_id else
+            "File uploaded but pipeline task could not be queued — check worker logs."
+        ),
+    }
+    if pipeline_warnings:
+        response["warnings"] = pipeline_warnings
+    return response
 
 
 class VideoUploadRequest(BaseModel):

@@ -7,7 +7,18 @@ Triggered on upload. Runs sequentially:
 """
 import logging
 import os
+import warnings
 from datetime import datetime
+
+# Suppress PyTorch pin_memory warning — fired per frame on CPU-only machines
+# because EasyOCR sets pin_memory=True in its DataLoader regardless of GPU availability.
+# The warning is harmless: PyTorch simply ignores the flag when no accelerator is found.
+warnings.filterwarnings(
+    "ignore",
+    message=".*pin_memory.*no accelerator.*",
+    category=UserWarning,
+    module="torch.utils.data.dataloader",
+)
 
 from app.celery_app import celery_app
 from app.db.session import SessionLocal

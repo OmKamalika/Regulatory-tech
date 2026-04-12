@@ -105,11 +105,23 @@
       "Bash(docker --version)",
       "Bash(python3:*)",
       "Read(//c/Users/mailt/.claude/plans/**)",
-      "Bash(grep -n \"def get_textbox\" \"c:/Users/mailt/OneDrive/Desktop/Regtech/.venv/Lib/site-packages/easyocr\"/*.py)"
+      "Bash(grep -n \"def get_textbox\" \"c:/Users/mailt/OneDrive/Desktop/Regtech/.venv/Lib/site-packages/easyocr\"/*.py)",
+      "Read(//c/Users/mailt/Downloads/**)",
+      "WebFetch(domain:nothing.community)",
+      "WebFetch(domain:www.figma.com)",
+      "Read(//c/Users/mailt/.claude/skills/te-industrial-design/**)",
+      "WebSearch",
+      "WebFetch(domain:fontsinuse.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.cdnfonts.com)",
+      "Bash(./../.venv/Scripts/python.exe -c \":*)"
     ],
     "additionalDirectories": [
       "c:\\Users\\mailt\\.claude\\plans",
       "c:\\Users\\mailt\\OneDrive\\Desktop\\Regtech\\backend"
     ]
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true
   }
 }

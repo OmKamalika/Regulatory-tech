@@ -693,12 +693,37 @@ def generate_report(state: ComplianceState) -> ComplianceState:
     else:
         status = "compliant"
 
-    # If OCR could not read any frame text, visual PII was never checked.
-    # Override to PARTIAL — a clean score here is unreliable, not a pass.
-    ocr_blind = any("OCR_WARNING" in e for e in state.get("errors", []))
-    if ocr_blind and status == "compliant":
-        status = "partial"
-        compliance_score = min(compliance_score, 70.0)  # Cap score to reflect unverified checks
+    # Detect stage failures — any failure forces score to 0 and status to "incomplete".
+    # Relying on partial data would give a misleading compliance result.
+    all_errors = state.get("errors", [])
+    ocr_failed = any("OCR_WARNING" in e for e in all_errors)
+    visual_failed = any("VISUAL_CHECK_ERROR" in e for e in all_errors)
+    no_frames = len(state.get("frames", [])) == 0
+
+    stage_failure = ocr_failed or visual_failed or no_frames
+
+    limitations = []
+    if stage_failure:
+        compliance_score = 0.0
+        status = "incomplete"
+        passed_checks = 0
+        if no_frames:
+            limitations.append(
+                "STAGE FAILURE — Frame extraction produced no frames. "
+                "The video could not be processed. Check FFmpeg installation and re-upload."
+            )
+        if ocr_failed:
+            limitations.append(
+                "STAGE FAILURE — OCR engine could not read text from video frames. "
+                "On-screen PII (Aadhaar, PAN, phone numbers) was not checked. "
+                "Install Tesseract or EasyOCR and re-process with force=true."
+            )
+        if visual_failed:
+            limitations.append(
+                "STAGE FAILURE — Visual object detection (YOLO) encountered an error. "
+                "Person and display-device detection did not complete. "
+                "Verify the YOLO model file path in settings and re-process."
+            )
 
     report_data = {
         "total_checks": total_checks,
@@ -708,18 +733,16 @@ def generate_report(state: ComplianceState) -> ComplianceState:
         "warnings": warnings,
         "compliance_score": compliance_score,
         "status": status,
-        "ocr_verified": not ocr_blind,
-        "limitations": (
-            ["Visual PII (on-screen text) was not checked — OCR engine was non-functional during processing. Re-process to verify."]
-            if ocr_blind else []
-        ),
+        "ocr_verified": not ocr_failed,
+        "stage_failure": stage_failure,
+        "limitations": limitations,
     }
 
     duration_ms = int((time.time() - t0) * 1000)
     audit.append(_make_audit_entry(
         step="report_generated",
         action=f"Report generated: score={compliance_score:.1f}, status={status}, violations={failed_checks}" +
-               (" [OCR UNVERIFIED]" if ocr_blind else ""),
+               (" [STAGE FAILURE — score forced to 0]" if stage_failure else ""),
         output_data=report_data,
         duration_ms=duration_ms,
     ))

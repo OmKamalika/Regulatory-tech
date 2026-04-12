@@ -12,7 +12,6 @@ Pipeline:
 """
 import logging
 from typing import List, Dict
-from pathlib import Path
 import tempfile
 import os
 
@@ -296,7 +295,7 @@ class VideoContentVectorizer:
             except Exception as e:
                 logger.error("Weaviate batch insert failed — semantic enrichment will be skipped: %s", e, exc_info=True)
 
-        # Persist frame analyses and transcription segments to PostgreSQL
+        # Persist frame analyses to PostgreSQL (separate transaction from transcription)
         db = SessionLocal()
         try:
             for frame in frame_data:
@@ -304,6 +303,7 @@ class VideoContentVectorizer:
                     video_id=video_id,
                     frame_number=frame["frame_number"],
                     timestamp=frame["timestamp"],
+                    minio_path="",  # frames stored locally during processing; no MinIO upload yet
                     objects_detected=frame["objects_detected"],
                     persons_detected=frame.get("persons_count", 0),
                     ocr_text=frame.get("ocr_text", ""),
@@ -311,22 +311,34 @@ class VideoContentVectorizer:
                     ocr_completed=frame.get("ocr_readable", True),
                     vectorized=True,
                 ))
-            for segment in transcription_segments:
-                db.add(TranscriptionSegment(
-                    video_id=video_id,
-                    start_time=segment.start,
-                    end_time=segment.end,
-                    text=segment.text,
-                    confidence=getattr(segment, "confidence", None),
-                    vectorized=True,
-                ))
             db.commit()
-            logger.info(f"Saved {len(frame_data)} frame analyses and {len(transcription_segments)} transcription segments to PostgreSQL")
+            logger.info(f"Saved {len(frame_data)} frame analyses to PostgreSQL")
         except Exception as e:
             db.rollback()
-            logger.error(f"Failed to save to PostgreSQL: {e}")
+            logger.error(f"Failed to save frame analyses to PostgreSQL: {e}", exc_info=True)
         finally:
             db.close()
+
+        # Persist transcription segments (separate transaction — failure here must not roll back frames)
+        if transcription_segments:
+            db = SessionLocal()
+            try:
+                for segment in transcription_segments:
+                    db.add(TranscriptionSegment(
+                        video_id=video_id,
+                        start_time=float(segment.start),   # cast np.float64 → Python float
+                        end_time=float(segment.end),        # cast np.float64 → Python float
+                        text=segment.text,
+                        confidence=getattr(segment, "confidence", None),
+                        vectorized=True,
+                    ))
+                db.commit()
+                logger.info(f"Saved {len(transcription_segments)} transcription segments to PostgreSQL")
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to save transcription segments to PostgreSQL: {e}", exc_info=True)
+            finally:
+                db.close()
 
         return len(items_to_store)
 

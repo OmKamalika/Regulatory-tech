@@ -108,6 +108,66 @@ def run_startup_checks(**kwargs):
     except Exception as e:
         warn("OCR", f"Failed to load: {e}")
 
+    # ── 6. DB schema write test — FrameAnalysis ────────────────────────────
+    # Catches column mismatches (e.g. NOT NULL without default) before any
+    # real video is processed. Inserts a sentinel row then immediately deletes it.
+    try:
+        import uuid as _uuid
+        from app.db.session import SessionLocal as _SL
+        from app.models.frame_analysis import FrameAnalysis as _FA
+        _db = _SL()
+        _sentinel_id = str(_uuid.uuid4())
+        _row = _FA(
+            id=_sentinel_id,
+            video_id="00000000-0000-0000-0000-000000000000",  # non-existent FK — test insert only
+            frame_number=0,
+            timestamp=0.0,
+            minio_path="",
+            objects_detected=[],
+            persons_detected=0,
+            ocr_text="",
+            visual_analysis_completed=False,
+            ocr_completed=False,
+            vectorized=False,
+        )
+        try:
+            _db.add(_row)
+            _db.flush()          # send INSERT without committing
+            ok("DB schema (FrameAnalysis)", "write test passed")
+        except Exception as _e:
+            fail("DB schema (FrameAnalysis)", f"Insert failed: {_e}  →  Run: alembic upgrade head")
+        finally:
+            _db.rollback()       # always roll back — sentinel row must not persist
+            _db.close()
+    except Exception as e:
+        warn("DB schema (FrameAnalysis)", f"Could not run write test: {e}")
+
+    # ── 7. DB schema write test — TranscriptionSegment ────────────────────
+    try:
+        import uuid as _uuid2
+        from app.db.session import SessionLocal as _SL2
+        from app.models.transcription import TranscriptionSegment as _TS
+        _db2 = _SL2()
+        _ts_row = _TS(
+            id=str(_uuid2.uuid4()),
+            video_id="00000000-0000-0000-0000-000000000000",
+            start_time=float(0.0),   # verify Python float (not np.float64) is accepted
+            end_time=float(1.0),
+            text="__startup_check__",
+            vectorized=False,
+        )
+        try:
+            _db2.add(_ts_row)
+            _db2.flush()
+            ok("DB schema (Transcription)", "write test passed")
+        except Exception as _e:
+            fail("DB schema (Transcription)", f"Insert failed: {_e}  →  Run: alembic upgrade head")
+        finally:
+            _db2.rollback()
+            _db2.close()
+    except Exception as e:
+        warn("DB schema (Transcription)", f"Could not run write test: {e}")
+
     # ── Print results table ────────────────────────────────────────────────
     width = 62
     print("\n" + "=" * width)

@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RegVision — DPDPA Compliance</title>
+
+<!-- Nothing OS fonts via raw GitHub CDN (xeji01/nothingfont) -->
+<style>
+@font-face {
+  font-family: 'Ndot57';
+  src: url('https://raw.githubusercontent.com/xeji01/nothingfont/main/fonts/Ndot57-Regular.otf') format('opentype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Ndot55';
+  src: url('https://raw.githubusercontent.com/xeji01/nothingfont/main/fonts/Ndot55-Regular.otf') format('opentype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'NType82';
+  src: url('https://raw.githubusercontent.com/xeji01/nothingfont/main/fonts/NType82-Regular.otf') format('opentype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'NType82Mono';
+  src: url('https://raw.githubusercontent.com/xeji01/nothingfont/main/fonts/NType82Mono-Regular.otf') format('opentype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'NType82';
+  src: url('https://raw.githubusercontent.com/xeji01/nothingfont/main/fonts/NType82-Headline.otf') format('opentype');
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+</style>
+
+<!-- Space Mono fallback from Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+/* ═══════════════════════════════════════
+   DESIGN TOKENS — Nothing OS × TE Fusion
+   Ndot57 display · NType82 body · pure black
+   Single orange signal · dot-matrix texture
+═══════════════════════════════════════ */
+:root {
+  /* Surfaces — pure Nothing OS black */
+  --bg:        #000000;
+  --surface:   #0A0A0A;
+  --card:      #111111;
+  --raised:    #171717;
+
+  /* Borders — hairline white opacity */
+  --border:    rgba(255,255,255,0.08);
+  --border-s:  rgba(255,255,255,0.16);
+  --border-x:  rgba(255,255,255,0.28);
+
+  /* Text — pure white hierarchy */
+  --text:      #FFFFFF;
+  --muted:     #5A5A5A;
+  --dim:       #222222;
+
+  /* Accent — TE orange (one signal, reserved) */
+  --orange:    #ED7B1C;
+  --o-dim:     rgba(237,123,28,0.07);
+  --o-glow:    rgba(237,123,28,0.35);
+
+  /* Status LEDs */
+  --green:     #3DCC47;
+  --g-dim:     rgba(61,204,71,0.07);
+  --red:       #FF2B00;
+  --r-dim:     rgba(255,43,0,0.07);
+  --amber:     #FFB000;
+  --a-dim:     rgba(255,176,0,0.07);
+
+  /* Typography — Nothing OS stack */
+  --f-dot:     'Ndot57','Ndot55','Space Mono',monospace;      /* dot-matrix display */
+  --f-mono:    'NType82Mono','Space Mono',monospace;          /* technical mono */
+  --f-body:    'NType82','Space Mono',monospace;              /* readable body */
+
+  /* Motion */
+  --ease:      cubic-bezier(0.2,0,0,1);
+  --fast:      120ms;
+  --base:      200ms;
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0 }
+html,body { height:100%; overflow:hidden }
+body {
+  font-family: var(--f-body);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  -webkit-font-smoothing: antialiased;
+}
+button { font-family: var(--f-body); cursor: pointer }
+input  { font-family: var(--f-body) }
+.hidden { display:none!important }
+
+/* ── LAYOUT ── */
+.layout {
+  display: grid;
+  grid-template-columns: 195px 1fr 195px;
+  height: 100vh;
+}
+
+/* ── PANELS ── */
+.panel-left, .panel-right {
+  background: var(--surface);
+  overflow-y: auto;
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: none;
+  color: var(--orange);
+}
+/* Force all text in both panels to orange — !important beats later specific rules */
+.panel-left *, .panel-right * { color: var(--orange) !important }
+
+/* Restore intentional status colours */
+.panel-right .no-viol,
+.panel-right .viol-count.none,
+.panel-right .sd-card.good .sd-value { color: var(--green) !important }
+
+.panel-right .sd-card.bad .sd-value,
+.panel-right .viol-count:not(.none) { color: var(--red) !important }
+.panel-left::-webkit-scrollbar,
+.panel-right::-webkit-scrollbar { display:none }
+.panel-left  { border-right: 1px solid var(--border) }
+.panel-right { border-left:  1px solid var(--border) }
+
+/* Centre — dot-grid texture (prominent, Nothing OS signature) */
+.panel-centre {
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 24px 20px;
+  gap: 14px;
+  overflow-y: auto;
+  position: relative;
+  scrollbar-width: none;
+}
+.panel-centre::-webkit-scrollbar { display:none }
+.panel-centre::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1px);
+  background-size: 16px 16px;
+  pointer-events: none;
+  z-index: 0;
+}
+.panel-centre > * { position: relative; z-index: 1 }
+
+/* ── LED DOT ── */
+.led {
+  display: inline-block; flex-shrink: 0;
+  width: 4px; height: 4px;
+  background: var(--dim);
+  /* Nothing OS uses squares, not circles, for some indicators */
+}
+.led.round { border-radius: 50% }
+.led.sq    { border-radius: 0 }
+
+.led.green  { background: var(--green);  box-shadow: 0 0 6px var(--green);  animation: pulse 2.4s ease-in-out infinite }
+.led.orange { background: var(--orange); box-shadow: 0 0 7px var(--o-glow); animation: pulse 1.1s ease-in-out infinite }
+.led.red    { background: var(--red);    box-shadow: 0 0 5px var(--red) }
+.led.amber  { background: var(--amber);  box-shadow: 0 0 5px var(--amber) }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+/* ── SECTION HEADER ── */
+.sec-head {
+  display: flex; align-items: center; gap: 7px;
+  padding: 14px 0 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+}
+.sec-head-label {
+  font-family: var(--f-dot);
+  font-size: 9px; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--muted);
+}
+
+/* ── LOGO ── */
+.logo-area {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.logo-row { display: flex; align-items: center; gap: 10px }
+.logo-badge {
+  width: 28px; height: 28px;
+  background: var(--orange);
+  display: grid; place-items: center;
+  border-radius: 0;        /* Nothing OS: sharp corners */
+  font-family: var(--f-dot);
+  font-size: 9px; color: #000; letter-spacing: 0.05em;
+}
+.logo-name {
+  font-family: var(--f-dot);
+  font-size: 20px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text);
+}
+.logo-name span { color: var(--orange) }
+.logo-sub {
+  font-family: var(--f-mono);
+  font-size: 7px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--muted);
+  text-align: center;
+}
+.logo-cjk { color: var(--dim); letter-spacing: 0.08em }
+
+/* ── PROC STATUS BAR ── */
+.proc-info {
+  width: 100%;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 11px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0;
+}
+.proc-file-name {
+  font-family: var(--f-mono);
+  font-size: 10px; letter-spacing: 0.03em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 1; min-width: 0;
+}
+.proc-file-status {
+  font-family: var(--f-dot);
+  font-size: 8px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--orange); margin-top: 2px;
+}
+
+/* ── UPLOAD CARD ── */
+.upload-card {
+  width: 100%;
+  height: 50vh;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.upload-card-header {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 7px;
+  background: var(--raised);
+}
+.upload-card-label {
+  font-family: var(--f-dot);
+  font-size: 8px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted);
+}
+
+/* Drop zone — inset LCD screen, Nothing OS dark pit style */
+.drop-zone {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 30px 20px; text-align: center; cursor: pointer;
+  background: #020202;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.9), inset 0 -1px 0 rgba(255,255,255,0.02);
+  transition: background var(--fast) var(--ease);
+}
+.drop-zone:hover, .drop-zone.over {
+  background: #050505;
+  outline: 1px solid var(--orange); outline-offset: -1px;
+}
+.drop-icon { width: 24px; height: 24px; margin: 0 auto 10px; color: var(--muted) }
+.drop-title {
+  font-family: var(--f-dot);
+  font-size: 10px; font-weight: 400;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  margin-bottom: 4px; color: var(--text);
+}
+.drop-sub {
+  font-family: var(--f-body);
+  font-size: 9px; letter-spacing: 0.04em;
+  color: var(--muted); margin-bottom: 12px;
+}
+.btn-browse {
+  background: var(--orange); color: #000; border: none;
+  padding: 5px 14px;
+  font-family: var(--f-dot);
+  font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase;
+  border-radius: 0;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.12);
+  transition: transform var(--fast) var(--ease);
+}
+.btn-browse:hover { background: #C96A12 }
+.btn-browse:active { transform: scale(0.96); box-shadow: none }
+.drop-formats { margin-top: 10px; display: flex; gap: 3px; justify-content: center; flex-wrap: wrap }
+.fmt {
+  font-family: var(--f-dot);
+  font-size: 7px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted); border: 1px solid var(--border);
+  padding: 2px 5px; border-radius: 0; background: var(--surface);
+}
+#file-input { display: none }
+
+/* ── FILE PREVIEW ── */
+.file-preview {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-top: 1px solid var(--border);
+}
+.file-preview-icon { display: none }
+.file-preview-info { flex: 1; min-width: 0 }
+.file-preview-name {
+  font-family: var(--f-mono);
+  font-size: 10px; letter-spacing: 0.02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.file-preview-size {
+  font-family: var(--f-dot);
+  font-size: 8px; letter-spacing: 0.1em; color: var(--muted); margin-top: 2px;
+}
+.btn-remove {
+  background: none; border: 1px solid var(--border-s);
+  color: var(--muted); padding: 3px 7px;
+  font-family: var(--f-dot);
+  font-size: 7px; letter-spacing: 0.12em; text-transform: uppercase;
+  border-radius: 0;
+  transition: border-color var(--fast), color var(--fast);
+}
+.btn-remove:hover { border-color: var(--red); color: var(--red) }
+
+/* ── UPLOAD FAILURE STATE ── */
+.file-preview.upload-failed {
+  border-top: 1px solid rgba(255,43,0,0.4);
+  background: var(--r-dim);
+}
+.file-preview.upload-failed .file-preview-name { color: var(--red) !important }
+.file-preview.upload-failed .file-preview-size { color: var(--red) !important; opacity: 0.7 }
+.upload-fail-label {
+  font-family: var(--f-dot);
+  font-size: 6px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--red); margin-top: 2px; display: none;
+}
+.file-preview.upload-failed .upload-fail-label { display: block }
+
+/* ── UPLOAD LOCKED (pipeline active) ── */
+.upload-locked-banner {
+  display: none;
+  padding: 7px 12px; align-items: center; gap: 7px;
+  border-bottom: 1px solid rgba(61,204,71,0.2);
+  background: var(--g-dim);
+}
+.upload-card.locked .upload-locked-banner { display: flex }
+.upload-locked-text {
+  font-family: var(--f-dot);
+  font-size: 7px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--green); flex: 1;
+}
+.upload-card.locked .drop-zone {
+  opacity: 0.12; pointer-events: none; cursor: default;
+}
+.upload-card.locked .btn-submit { display: none }
+
+/* ── ERROR ── */
+.upload-err {
+  padding: 6px 12px;
+  font-family: var(--f-mono); font-size: 8px; letter-spacing: 0.06em;
+  color: var(--red); display: none;
+  border-top: 1px solid rgba(255,43,0,0.18);
+  background: var(--r-dim);
+}
+.upload-err.show { display: block }
+
+/* ── SUBMIT — primary CTA, only orange control in view ── */
+.btn-submit {
+  width: calc(100% - 24px); margin: 10px 12px 12px;
+  padding: 10px;
+  background: var(--orange); color: #000; border: none;
+  font-family: var(--f-dot);
+  font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+  border-radius: 0;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.1);
+  transition: transform var(--fast) var(--ease), background var(--fast);
+}
+.btn-submit:hover { background: #C96A12 }
+.btn-submit:active { transform: scale(0.98); box-shadow: none }
+.btn-submit:disabled { opacity: .3; cursor: not-allowed }
+
+/* ── STAGE KEYS — hardware key aesthetic, Nothing OS sharp ── */
+.stages-wrap { width: 100%; }
+.stages-label {
+  font-family: var(--f-dot);
+  font-size: 7px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--orange); margin-bottom: 5px;
+}
+.stages { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px }
+.stage {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 9px 4px 7px; text-align: center;
+  transition: border-color var(--base) var(--ease), background var(--base);
+  position: relative;
+  /* TE key bevel */
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+/* LED top-right */
+.stage::after {
+  content: '';
+  position: absolute; top: 5px; right: 5px;
+  width: 3px; height: 3px; border-radius: 0;   /* square LED — Nothing OS */
+  background: var(--dim);
+  transition: background var(--base), box-shadow var(--base);
+}
+.stage.active { border-color: var(--orange); background: var(--o-dim) }
+.stage.active::after { background: var(--orange); box-shadow: 0 0 5px var(--o-glow); animation: pulse 1.1s ease-in-out infinite }
+.stage.done   { border-color: rgba(61,204,71,0.22); background: var(--g-dim) }
+.stage.done::after { background: var(--green); box-shadow: 0 0 5px var(--green); animation: none }
+.stage-icon { display: none }
+.stage-name {
+  font-family: var(--f-dot);
+  font-size: 7px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--text);
+}
+.stage.active .stage-name { color: var(--orange) }
+.stage.done   .stage-name { color: var(--green)  }
+.stage-state {
+  font-family: var(--f-mono);
+  font-size: 7px; letter-spacing: 0.06em;
+  color: var(--orange); margin-top: 3px;
+}
+.stage.active .stage-state { color: var(--orange) }
+.stage.done   .stage-state { color: var(--green)  }
+
+/* ── PROGRESS BAR — 1px hairline, Nothing OS precision ── */
+.prog-wrap { width: 100%; }
+.prog-bar-top {
+  display: flex; justify-content: space-between; margin-bottom: 5px;
+  font-family: var(--f-dot);
+  font-size: 7px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted);
+}
+.prog-bar { height: 1px; background: var(--dim); overflow: hidden }
+.prog-bar-fill {
+  height: 100%; width: 0%;
+  background: var(--orange);
+  transition: width .4s var(--ease);
+  box-shadow: 0 0 6px var(--o-glow);
+}
+.prog-bar-fill.done { background: var(--green); box-shadow: 0 0 6px var(--green) }
+
+/* ── CENTRE FACT DISPLAY — inset LCD, Ndot font ── */
+.fact-display {
+  width: 100%;
+  background: #000000;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 24px 20px;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.9), inset 0 -1px 0 rgba(255,255,255,0.02);
+  display: flex; flex-direction: column; gap: 10px;
+  min-height: 120px;
+}
+.fact-centre-kw {
+  font-family: var(--f-dot);
+  font-size: 11px; letter-spacing: 0.06em;
+  color: var(--orange); line-height: 1.4;
+}
+.fact-centre-rest {
+  font-family: var(--f-body);
+  font-size: 11px; letter-spacing: 0.01em; line-height: 1.7;
+  color: var(--muted);
+}
+
+/* ── TIMELINE ── */
+.timeline { display: flex; flex-direction: column }
+.tl-item {
+  display: grid; grid-template-columns: 4px auto 1fr;
+  gap: 6px; align-items: start;
+  padding: 7px 0; border-bottom: 1px solid var(--border);
+}
+.tl-item:last-child { border-bottom: none }
+.tl-dot {
+  width: 4px; height: 4px; border-radius: 0;   /* square — Nothing OS */
+  background: var(--dim); margin-top: 3px; flex-shrink: 0;
+}
+.tl-item.done   .tl-dot { background: var(--green); box-shadow: 0 0 4px var(--green) }
+.tl-item.active .tl-dot { background: var(--orange); box-shadow: 0 0 5px var(--o-glow); animation: pulse 1.1s ease-in-out infinite }
+.tl-time {
+  font-family: var(--f-mono);
+  font-size: 7px; letter-spacing: 0.04em;
+  color: var(--muted); white-space: nowrap; padding-top: 1px;
+}
+.tl-text {
+  font-family: var(--f-body);
+  font-size: 8px; letter-spacing: 0.01em; line-height: 1.5; color: var(--text);
+}
+
+/* ── EMPTY STATES ── */
+.panel-empty {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; gap: 14px; color: var(--dim); padding: 24px 10px;
+}
+/* Dot-grid icon — 3×3 squares, Nothing OS aesthetic */
+.panel-empty-dots {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 4px; width: 28px;
+}
+.panel-empty-dots span {
+  width: 4px; height: 4px; background: var(--dim);
+  border-radius: 0; display: block; margin: auto;
+}
+.panel-empty-text {
+  font-family: var(--f-dot);
+  font-size: 7px; letter-spacing: 0.18em;
+  text-transform: uppercase; line-height: 2.4; color: var(--dim);
+}
+
+/* ── SCORE RING ── */
+.score-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 10px }
+.score-ring-wrap { position: relative; width: 110px; height: 110px }
+.score-ring-wrap svg { transform: rotate(-90deg) }
+.sc-track { fill: none; stroke: var(--raised); stroke-width: 4 }
+.sc-fill {
+  fill: none; stroke: var(--orange); stroke-width: 4;
+  stroke-dasharray: 345.6; stroke-dashoffset: 345.6;
+  stroke-linecap: square;
+  transition: stroke-dashoffset .8s var(--ease), stroke .4s;
+}
+.score-center {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.score-big {
+  font-family: var(--f-dot);
+  font-size: 28px; letter-spacing: -0.01em; line-height: 1;
+}
+.score-unit {
+  font-family: var(--f-mono);
+  font-size: 7px; letter-spacing: 0.12em; color: var(--muted); margin-top: 1px;
+}
+.score-status {
+  font-family: var(--f-dot);
+  font-size: 7px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--orange); margin-top: 3px;
+}
+
+/* ── STATS GRID ── */
+.sd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; width: 100%; margin-bottom: 10px }
+.sd-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 0; padding: 8px 5px; text-align: center;
+}
+.sd-card.good { border-color: rgba(61,204,71,0.2) }
+.sd-card.bad  { border-color: rgba(255,43,0,0.2) }
+.sd-value {
+  font-family: var(--f-dot);
+  font-size: 18px; letter-spacing: -0.01em;
+}
+.sd-card.good .sd-value { color: var(--green) }
+.sd-card.bad  .sd-value { color: var(--red)   }
+.sd-label {
+  font-family: var(--f-dot);
+  font-size: 6px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted); margin-top: 2px;
+}
+
+/* ── DQ ALERT ── */
+.dq-alert {
+  background: var(--a-dim); border: 1px solid rgba(255,176,0,0.18);
+  border-radius: 0; padding: 7px 9px;
+  font-family: var(--f-body);
+  font-size: 8px; letter-spacing: 0.02em; color: var(--amber); margin-bottom: 8px; line-height: 1.55;
+}
+
+/* ── VIOLATIONS ── */
+.viol-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px }
+.viol-title {
+  font-family: var(--f-dot);
+  font-size: 7px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+}
+.viol-count {
+  font-family: var(--f-dot);
+  font-size: 9px; letter-spacing: 0.06em; color: var(--red);
+}
+.viol-count.none { color: var(--green) }
+.viol-list { display: flex; flex-direction: column; gap: 3px; max-height: 150px; overflow-y: auto; scrollbar-width: none }
+.viol-list::-webkit-scrollbar { display: none }
+.viol { background: var(--card); border-radius: 0; padding: 7px 8px; border-left: 2px solid var(--red) }
+.viol.low    { border-color: var(--amber)  }
+.viol.medium { border-color: var(--orange) }
+.viol.high, .viol.critical { border-color: var(--red) }
+.viol-top { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 3px; align-items: center }
+.sev {
+  font-family: var(--f-dot);
+  font-size: 6px; letter-spacing: 0.12em;
+  text-transform: uppercase; padding: 1px 4px; border-radius: 0;
+}
+.sev.low    { background: var(--a-dim); color: var(--amber)  }
+.sev.medium { background: var(--o-dim); color: var(--orange) }
+.sev.high, .sev.critical { background: var(--r-dim); color: var(--red) }
+.rule-ref {
+  font-family: var(--f-mono);
+  font-size: 6px; letter-spacing: 0.1em; color: var(--muted);
+  border: 1px solid var(--border-s); padding: 1px 4px; border-radius: 0;
+}
+.ts-tag { font-family: var(--f-mono); font-size: 6px; letter-spacing: 0.04em; color: var(--muted) }
+.viol-desc { font-family: var(--f-body); font-size: 9px; letter-spacing: 0.01em; line-height: 1.4; color: var(--text) }
+.no-viol {
+  font-family: var(--f-dot);
+  font-size: 8px; letter-spacing: 0.1em; color: var(--green);
+  padding: 9px; text-align: center; background: var(--g-dim); border-radius: 0;
+}
+
+/* ── RECOMMENDATIONS ── */
+.rec-grid { display: flex; flex-direction: column; gap: 4px }
+.rec-card {
+  background: var(--card); border-radius: 0;
+  padding: 7px 9px; border: 1px solid var(--border); border-left: 2px solid var(--orange);
+}
+.rec-icon { display: none }
+.rec-title {
+  font-family: var(--f-dot);
+  font-size: 6px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--orange); margin-bottom: 3px;
+}
+.rec-text { font-family: var(--f-body); font-size: 8px; letter-spacing: 0.01em; line-height: 1.45; color: var(--muted) }
+
+/* ── EXPORT KEYS — hardware key row ── */
+.export-btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px }
+.export-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 10px 4px;
+  background: var(--raised); border: 1px solid var(--border); border-radius: 0;
+  color: var(--muted);
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03);
+  transition: border-color var(--fast) var(--ease), background var(--fast), color var(--fast), transform var(--fast);
+  font-family: var(--f-dot);
+}
+.export-btn:hover  { border-color: var(--orange); background: var(--o-dim); color: var(--text) }
+.export-btn:active { transform: scale(0.96); box-shadow: none }
+.export-btn-icon   { display: none }
+.export-btn-label  { font-size: 8px; font-weight: 400; letter-spacing: 0.14em; text-transform: uppercase }
+.export-btn-desc   { font-family: var(--f-body); font-size: 6px; letter-spacing: 0.08em; color: var(--muted) }
+
+/* ── RESET ── */
+.btn-new {
+  width: 100%; padding: 7px; margin-top: 7px;
+  background: none; border: 1px solid var(--border-s); border-radius: 0;
+  color: var(--muted);
+  font-family: var(--f-dot);
+  font-size: 7px; letter-spacing: 0.14em; text-transform: uppercase;
+  transition: border-color var(--fast), color var(--fast);
+}
+.btn-new:hover { border-color: var(--orange); color: var(--orange) }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ═══ LEFT PANEL ═══ -->
+  <div class="panel-left">
+
+    <div id="section-timeline" class="hidden">
+      <div class="sec-head">
+        <div class="led sq orange"></div>
+        <span class="sec-head-label">Pipeline Log</span>
+      </div>
+      <div class="timeline" id="timeline-list"></div>
+    </div>
+
+    <div class="panel-empty" id="left-empty">
+      <div class="panel-empty-dots">
+        <span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+      </div>
+      <div class="panel-empty-text">Upload a<br>video to<br>see log</div>
+    </div>
+
+  </div>
+
+  <!-- ═══ CENTRE PANEL ═══ -->
+  <div class="panel-centre">
+
+    <!-- Logo -->
+    <div class="logo-area">
+      <div class="logo-row">
+        <div class="logo-badge">RV</div>
+        <div class="logo-name">Reg<span>Vision</span></div>
+        <div class="led round green" id="sys-dot" style="margin-left:8px"></div>
+      </div>
+      <div class="logo-sub">
+        DPDPA&nbsp;2025&nbsp;·&nbsp;DIGITAL&nbsp;PERSONAL&nbsp;DATA&nbsp;PROTECTION&nbsp;ACT
+      </div>
+    </div>
+
+    <!-- Proc status bar -->
+    <div class="proc-info hidden" id="proc-top-info">
+      <div class="led sq orange"></div>
+      <div style="min-width:0;flex:1;margin-left:6px">
+        <div class="proc-file-name" id="proc-filename">video.mp4</div>
+        <div class="proc-file-status" id="proc-status">Initializing pipeline...</div>
+      </div>
+    </div>
+
+    <!-- Upload card -->
+    <div class="upload-card" id="upload-card">
+      <div class="upload-card-header">
+        <div class="led sq" style="background:var(--dim)"></div>
+        <span class="upload-card-label">Input — Video File</span>
+      </div>
+
+      <!-- Shown only when upload-card has .locked class -->
+      <div class="upload-locked-banner">
+        <div class="led sq green"></div>
+        <span class="upload-locked-text">Pipeline active — remove file to reset</span>
+      </div>
+
+      <div class="drop-zone" id="drop-zone"
+        ondragover="onDragOver(event)"
+        ondragleave="onDragLeave(event)"
+        ondrop="onDrop(event)"
+        onclick="document.getElementById('file-input').click()">
+        <div class="drop-icon">
+          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+          </svg>
+        </div>
+        <div class="drop-title">Drop Video Here</div>
+        <div class="drop-sub">or click to browse from your computer</div>
+        <button class="btn-browse" onclick="event.stopPropagation();document.getElementById('file-input').click()">Browse Files</button>
+        <div class="drop-formats">
+          <span class="fmt">MP4</span><span class="fmt">MOV</span><span class="fmt">AVI</span>
+          <span class="fmt">MKV</span><span class="fmt">WEBM</span>
+        </div>
+      </div>
+
+      <input type="file" id="file-input" accept="video/*" onchange="onFileSelect(event)">
+
+      <div class="file-preview hidden" id="file-preview">
+        <div class="led sq green" style="flex-shrink:0"></div>
+        <div class="file-preview-info" style="margin-left:7px">
+          <div class="file-preview-name" id="preview-name">video.mp4</div>
+          <div class="file-preview-size" id="preview-size">—</div>
+          <div class="upload-fail-label">Upload failed — retry or remove</div>
+        </div>
+        <button class="btn-remove" onclick="clearFile()">Remove</button>
+      </div>
+      <div class="file-preview-icon"></div>
+
+      <div class="upload-err" id="upload-err"></div>
+
+      <button class="btn-submit hidden" id="btn-submit" onclick="submitVideo()">
+        Analyse Video
+        <svg width="8" height="8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Fact display — replaces upload card during processing -->
+    <div id="centre-processing" class="hidden">
+      <div class="fact-display">
+        <div class="fact-centre-kw" id="fact-centre-kw"></div>
+        <div class="fact-centre-rest" id="fact-centre-rest"></div>
+      </div>
+    </div>
+
+    <!-- Stage keys -->
+    <div class="stages-wrap">
+      <div class="stages-label">Pipeline Stages</div>
+      <div class="stages">
+        <div class="stage" id="st-frames">
+          <div class="stage-icon"></div>
+          <div class="stage-name">Frames</div>
+          <div class="stage-state" id="st-frames-val">Wait</div>
+        </div>
+        <div class="stage" id="st-ocr">
+          <div class="stage-icon"></div>
+          <div class="stage-name">OCR</div>
+          <div class="stage-state" id="st-ocr-val">Wait</div>
+        </div>
+        <div class="stage" id="st-visual">
+          <div class="stage-icon"></div>
+          <div class="stage-name">Visual</div>
+          <div class="stage-state" id="st-visual-val">Wait</div>
+        </div>
+        <div class="stage" id="st-audio">
+          <div class="stage-icon"></div>
+          <div class="stage-name">Audio</div>
+          <div class="stage-state" id="st-audio-val">Wait</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="prog-wrap">
+      <div class="prog-bar-top">
+        <span>Overall Progress</span>
+        <span id="prog-pct">0%</span>
+      </div>
+      <div class="prog-bar">
+        <div class="prog-bar-fill" id="prog-fill"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══ RIGHT PANEL ═══ -->
+  <div class="panel-right">
+
+    <div class="panel-empty" id="right-empty">
+      <div class="panel-empty-dots">
+        <span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+      </div>
+      <div class="panel-empty-text">Results<br>after<br>analysis</div>
+    </div>
+
+    <div id="section-results" class="hidden">
+      <div class="sec-head">
+        <div class="led sq green"></div>
+        <span class="sec-head-label">Compliance Result</span>
+      </div>
+      <div style="font-family:var(--f-mono);font-size:7px;letter-spacing:0.04em;color:var(--muted);margin-bottom:10px" id="results-sub">Analysis complete.</div>
+
+      <!-- Score ring -->
+      <div class="score-wrap">
+        <div class="score-ring-wrap">
+          <svg width="110" height="110" viewBox="0 0 130 130">
+            <circle class="sc-track" cx="65" cy="65" r="55"/>
+            <circle class="sc-fill" id="sc-fill" cx="65" cy="65" r="55"/>
+          </svg>
+          <div class="score-center">
+            <div class="score-big" id="res-score">—</div>
+            <div class="score-unit">/ 100</div>
+            <div class="score-status" id="res-status">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="sd-grid">
+        <div class="sd-card">
+          <div class="sd-value" id="res-total">—</div>
+          <div class="sd-label">Checks</div>
+        </div>
+        <div class="sd-card good">
+          <div class="sd-value" id="res-passed">—</div>
+          <div class="sd-label">Passed</div>
+        </div>
+        <div class="sd-card bad">
+          <div class="sd-value" id="res-failed">—</div>
+          <div class="sd-label">Failed</div>
+        </div>
+        <div class="sd-card bad">
+          <div class="sd-value" id="res-critical">—</div>
+          <div class="sd-label">Critical</div>
+        </div>
+      </div>
+
+      <div class="dq-alert hidden" id="dq-alert"></div>
+
+      <div>
+        <div class="viol-header">
+          <span class="viol-title">Violations</span>
+          <span class="viol-count" id="viol-count">0 issues</span>
+        </div>
+        <div class="viol-list" id="viol-list"></div>
+      </div>
+
+      <div id="rec-section" class="hidden" style="margin-top:10px">
+        <div class="sec-head">
+          <div class="led sq orange"></div>
+          <span class="sec-head-label">Recommendations</span>
+        </div>
+        <div class="rec-grid" id="rec-grid"></div>
+      </div>
+    </div>
+
+    <div id="section-export" class="hidden">
+      <div class="sec-head" style="margin-top:8px">
+        <div class="led sq" style="background:var(--dim)"></div>
+        <span class="sec-head-label">Export Report</span>
+      </div>
+      <div class="export-btns">
+        <button class="export-btn" onclick="exportJSON()">
+          <div class="export-btn-icon"></div>
+          <div class="export-btn-label">JSON</div>
+          <div class="export-btn-desc">Raw data</div>
+        </button>
+        <button class="export-btn" onclick="exportCSV()">
+          <div class="export-btn-icon"></div>
+          <div class="export-btn-label">CSV</div>
+          <div class="export-btn-desc">Sheet</div>
+        </button>
+        <button class="export-btn" onclick="exportText()">
+          <div class="export-btn-icon"></div>
+          <div class="export-btn-label">TXT</div>
+          <div class="export-btn-desc">Report</div>
+        </button>
+      </div>
+      <button class="btn-new" onclick="startOver()">↺ New Analysis</button>
+    </div>
+
+  </div>
+
+</div><!-- /layout -->
+
+<script>
+const API = 'http://localhost:8000/api/v1';
+let selectedFile = null;
+let currentVideoId = null;
+let currentReportId = null;
+let currentReport = null;
+let pollTimer = null;
+let timelineEvents = [];
+
+const FACTS = [
+  { kw: '§3 — Personal Data:', rest: ' Any data about an individual who is identifiable by or in relation to such data.' },
+  { kw: '§4 — Applicability:', rest: ' DPDPA applies to processing of digital personal data within India and to profiling of Indian data principals abroad.' },
+  { kw: '§5 — Data Minimisation:', rest: ' Data fiduciaries may only collect personal data that is strictly necessary for the stated purpose.' },
+  { kw: '§6 — Valid Consent:', rest: ' Consent must be free, specific, informed, unconditional, and unambiguous — a blanket tick-box does not qualify.' },
+  { kw: '§7 — Legitimate Uses:', rest: ' Processing without consent is allowed for state functions, legal proceedings, medical emergencies, and employment.' },
+  { kw: '§8 — Fiduciary Duties:', rest: ' Data fiduciaries must ensure accuracy, completeness, and deletion of data once its purpose is fulfilled.' },
+  { kw: '§9 — Children\'s Data:', rest: ' Processing data of children under 18 requires verifiable parental consent; behavioural tracking of minors is prohibited.' },
+  { kw: '§11 — Right to Information:', rest: ' Data principals can request a summary of their personal data and the processing activities carried out on it.' },
+  { kw: '§12 — Right to Correction:', rest: ' Data principals can demand correction, completion, or updating of inaccurate personal data held by a fiduciary.' },
+  { kw: '§13 — Right to Erasure:', rest: ' Personal data must be erased upon withdrawal of consent unless retention is required by law.' },
+  { kw: '§14 — Right to Grievance:', rest: ' Every data fiduciary must provide an accessible grievance redressal mechanism with a defined response timeline.' },
+  { kw: '§16 — Data Protection Board:', rest: ' The DPB of India adjudicates complaints, investigates breaches, and can impose penalties up to ₹250 crore.' },
+  { kw: '§17 — Significant Fiduciaries:', rest: ' The government may designate large platforms as Significant Data Fiduciaries, imposing stricter audit and assessment obligations.' },
+  { kw: '§29 — Penalties:', rest: ' Failure to implement reasonable security safeguards attracting a breach can result in fines up to ₹250 crore per instance.' },
+  { kw: '§40 — Cross-Border Transfers:', rest: ' Personal data may only be transferred to countries notified as permissible by the Central Government under DPDPA.' },
+];
+
+let centreFact = null;
+let centreFactIdx = 0;
+function startCentreFacts() { centreFactIdx = 0; showCentreFact(); }
+function showCentreFact() {
+  const idx = centreFactIdx % FACTS.length;
+  const fact = FACTS[idx];
+  document.getElementById('fact-centre-kw').textContent = fact.kw;
+  document.getElementById('fact-centre-rest').textContent = fact.rest.trim();
+  centreFactIdx++;
+  centreFact = setTimeout(showCentreFact, 30000);
+}
+function stopCentreFacts() { clearTimeout(centreFact); centreFact = null; }
+
+function onDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('over'); }
+function onDragLeave(e) { document.getElementById('drop-zone').classList.remove('over'); }
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('video/')) setFile(file);
+  else showErr('Please drop a video file.');
+}
+function onFileSelect(e) { const file = e.target.files[0]; if (file) setFile(file); }
+function setFile(file) {
+  selectedFile = file;
+  document.getElementById('preview-name').textContent = file.name;
+  document.getElementById('preview-size').textContent = formatSize(file.size);
+  const fp = document.getElementById('file-preview');
+  fp.classList.remove('hidden', 'upload-failed');
+  hideErr();
+  // Show submit button — user clicks to start upload (no auto-submit)
+  document.getElementById('btn-submit').classList.remove('hidden');
+}
+function clearFile() {
+  selectedFile = null;
+  document.getElementById('file-input').value = '';
+  const fp = document.getElementById('file-preview');
+  fp.classList.add('hidden');
+  fp.classList.remove('upload-failed');
+  document.getElementById('btn-submit').classList.add('hidden');
+  document.getElementById('upload-card').classList.remove('locked');
+  hideErr();
+}
+function formatSize(b) {
+  if (b > 1e9) return (b/1e9).toFixed(1) + ' GB';
+  if (b > 1e6) return (b/1e6).toFixed(1) + ' MB';
+  return (b/1e3).toFixed(0) + ' KB';
+}
+function showErr(msg) { const e = document.getElementById('upload-err'); e.textContent = msg; e.classList.add('show'); }
+function hideErr() { document.getElementById('upload-err').classList.remove('show'); }
+
+async function submitVideo() {
+  if (!selectedFile) return showErr('No file selected.');
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true; btn.textContent = 'Uploading...';
+  hideErr();
+  // Clear any previous failure state
+  document.getElementById('file-preview').classList.remove('upload-failed');
+  try {
+    const form = new FormData();
+    form.append('file', selectedFile);
+    const r = await fetch(`${API}/videos/upload-file`, { method: 'POST', body: form });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || `Upload failed (${r.status}).`);
+    const videoId = d.video_id;
+    if (!videoId) throw new Error('Server did not return a video ID.');
+    currentVideoId = videoId;
+    // Lock the upload card — user must click Remove to reset
+    document.getElementById('upload-card').classList.add('locked');
+    addTimelineEvent('Video accepted by server', 'done');
+    startProcessing(selectedFile.name);
+  } catch (e) {
+    // Mark file preview as failed, keep Remove button accessible
+    document.getElementById('file-preview').classList.add('upload-failed');
+    showErr(e.message);
+    btn.disabled = false;
+    btn.innerHTML = 'Retry Upload <svg width="8" height="8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>';
+  }
+}
+
+function startProcessing(filename) {
+  hide('upload-card'); show('centre-processing'); startCentreFacts();
+  show('section-timeline'); hide('left-empty');
+  document.getElementById('proc-top-info').classList.remove('hidden');
+  document.getElementById('proc-filename').textContent = filename;
+  document.getElementById('proc-status').textContent = 'Pipeline starting...';
+  document.getElementById('prog-pct').textContent = '0%';
+  document.getElementById('prog-fill').style.width = '0%';
+  resetStages(); timelineEvents = []; renderTimeline();
+  pollTimer = setInterval(() => pollStatus(filename), 30000);
+  pollStatus(filename);
+}
+
+async function pollStatus(filename) {
+  try {
+    const r = await fetch(`${API}/videos/${currentVideoId}/status`);
+    const d = await r.json();
+    const pct = d.progress || 0;
+    const status = d.status;
+    document.getElementById('proc-status').textContent = statusText(status);
+    document.getElementById('prog-pct').textContent = pct + '%';
+    const fill = document.getElementById('prog-fill');
+    fill.style.width = pct + '%';
+    if (status === 'completed') fill.classList.add('done');
+    const stages = d.pipeline_stages || {};
+    const fe  = stages.frame_extraction || {};
+    const ocr = stages.ocr             || {};
+    const tr  = stages.transcription   || {};
+
+    // FRAMES — show total frame count when done
+    updateStage('st-frames', fe, 'st-frames-val',
+      fe.frames_total ? `${fe.frames_total} frames` : 'Done');
+
+    // OCR — show how many frames had readable text
+    updateStage('st-ocr', ocr, 'st-ocr-val',
+      ocr.frames_with_text !== undefined ? `${ocr.frames_with_text} w/ text` : 'Done');
+
+    // VISUAL — driven by frame_extraction (YOLO runs per frame); show persons found
+    updateStage('st-visual', fe, 'st-visual-val',
+      fe.persons_detected_in !== undefined ? `${fe.persons_detected_in} persons` : 'Done');
+
+    // AUDIO — transcription stage
+    updateStage('st-audio', tr, 'st-audio-val', 'Transcribed');
+
+    if (fe.status === 'completed')  addTimelineEvent(`Frames extracted — ${fe.frames_total || '?'} frames`, 'done');
+    if (ocr.status === 'completed' || ocr.status === 'degraded') addTimelineEvent(`OCR — ${ocr.frames_with_text || 0} frames with text`, 'done');
+    if (fe.status === 'completed')  addTimelineEvent(`Visual — ${fe.persons_detected_in || 0} persons detected`, 'done');
+    if (tr.status === 'completed')  addTimelineEvent('Audio transcription complete', 'done');
+    if (status === 'completed') {
+      clearInterval(pollTimer); pollTimer = null; stopCentreFacts();
+      addTimelineEvent('Pipeline complete — compliance check...', 'active');
+      renderTimeline();
+      await runComplianceCheck(filename);
+    } else if (status === 'failed') {
+      clearInterval(pollTimer); pollTimer = null; stopCentreFacts();
+      addTimelineEvent('Pipeline FAILED — check worker logs', 'done');
+      renderTimeline();
+    } else {
+      if (status === 'processing') addTimelineEvent('Running at ' + pct + '%', 'active');
+      renderTimeline();
+    }
+  } catch (e) { console.error(e); }
+}
+
+function statusText(s) {
+  return { queued:'Queued — waiting for worker', processing:'Pipeline running...', completed:'Complete', failed:'Failed' }[s] || s;
+}
+function resetStages() {
+  ['st-frames','st-ocr','st-visual','st-audio'].forEach(id => document.getElementById(id).classList.remove('active','done'));
+}
+function updateStage(id, data, valId, doneText) {
+  const el = document.getElementById(id); const vEl = document.getElementById(valId);
+  if (!el || !data) return;
+  el.classList.remove('active','done');
+  if (data.status === 'completed' || data.status === 'degraded') {
+    el.classList.add('done');
+    vEl.textContent = doneText || 'Done';
+  } else if (data.status === 'processing' || data.status === 'running') {
+    el.classList.add('active');
+    vEl.textContent = 'Running';
+  }
+}
+
+const seenEvents = new Set();
+function addTimelineEvent(text, state) {
+  if (seenEvents.has(text)) return;
+  seenEvents.add(text);
+  const now = new Date().toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  timelineEvents.push({ text, state, time: now });
+}
+function renderTimeline() {
+  document.getElementById('timeline-list').innerHTML = timelineEvents.map(e => `
+    <div class="tl-item ${e.state}">
+      <div class="tl-dot"></div>
+      <div class="tl-time">${e.time}</div>
+      <div class="tl-text">${e.text}</div>
+    </div>`).join('');
+}
+
+async function runComplianceCheck(filename) {
+  try {
+    const r = await fetch(`${API}/compliance/check/${currentVideoId}`, { method: 'POST' });
+    const d = await r.json();
+    currentReportId = d.report_id;
+    addTimelineEvent('Compliance check complete', 'done'); renderTimeline();
+    const rr = await fetch(`${API}/compliance/report/${currentVideoId}`);
+    if (rr.ok) { currentReport = await rr.json(); renderResults(currentReport, filename); }
+  } catch (e) { addTimelineEvent('Compliance check failed: ' + e.message, 'done'); renderTimeline(); }
+}
+
+function renderResults(data, filename) {
+  show('section-results'); show('section-export'); hide('right-empty');
+  const score = Math.round(data.compliance_score || 0);
+  const findings = data.findings || data.violations || [];
+  const circumference = 2 * Math.PI * 55;
+  const offset = circumference - (score / 100) * circumference;
+  const fill = document.getElementById('sc-fill');
+  fill.style.strokeDasharray = circumference; fill.style.strokeDashoffset = offset;
+  const color = score >= 80 ? 'var(--green)' : score >= 60 ? 'var(--amber)' : 'var(--red)';
+  fill.style.stroke = color;
+  document.getElementById('res-score').textContent = score;
+  document.getElementById('res-score').style.color = color;
+  const verdict = score >= 80 ? 'COMPLIANT' : score >= 60 ? 'PARTIAL' : 'NON-COMPLIANT';
+  document.getElementById('res-status').textContent = verdict;
+  document.getElementById('res-status').style.color = color;
+  document.getElementById('results-sub').textContent = data.filename || filename || currentVideoId;
+  document.getElementById('res-total').textContent    = data.total_checks || 0;
+  document.getElementById('res-passed').textContent   = data.passed_checks || 0;
+  document.getElementById('res-failed').textContent   = data.failed_checks || 0;
+  document.getElementById('res-critical').textContent = data.critical_violations || 0;
+  const dq = data.data_quality;
+  if (dq && dq.warning) {
+    const a = document.getElementById('dq-alert');
+    a.textContent = '⚠ ' + dq.warning; a.classList.remove('hidden');
+  }
+  const vc = document.getElementById('viol-count');
+  vc.textContent = findings.length + ' issue' + (findings.length !== 1 ? 's' : '');
+  vc.className = 'viol-count' + (findings.length === 0 ? ' none' : '');
+  if (!findings.length) {
+    document.getElementById('viol-list').innerHTML = `<div class="no-viol">No violations — fully compliant with DPDPA 2025</div>`;
+  } else {
+    document.getElementById('viol-list').innerHTML = findings.map(f => {
+      const sev = (f.severity || 'low').toLowerCase();
+      const ts = f.timestamp ? `<span class="ts-tag">${f.timestamp}</span>` : '';
+      return `<div class="viol ${sev}">
+        <div class="viol-top">
+          <span class="sev ${sev}">${sev.toUpperCase()}</span>
+          ${f.rule_reference ? `<span class="rule-ref">${f.rule_reference}</span>` : ''}${ts}
+        </div>
+        <div class="viol-desc">${f.description || f.title || 'Violation detected'}</div>
+      </div>`;
+    }).join('');
+  }
+  if (data.recommendations && data.recommendations.length) {
+    show('rec-section');
+    document.getElementById('rec-grid').innerHTML = data.recommendations.map(r => `
+      <div class="rec-card">
+        <div class="rec-title">Recommendation</div>
+        <div class="rec-text">${r}</div>
+      </div>`).join('');
+  }
+  addTimelineEvent('Results ready — export available', 'done'); renderTimeline();
+}
+
+function exportJSON() {
+  if (!currentReport) return;
+  downloadBlob(new Blob([JSON.stringify(currentReport, null, 2)], { type:'application/json' }), `compliance-${currentVideoId}.json`);
+}
+function exportCSV() {
+  if (!currentReport) return;
+  const f = currentReport.findings || currentReport.violations || [];
+  const rows = f.map(v => [v.severity||'', v.rule_reference||'', v.timestamp||'', `"${(v.description||'').replace(/"/g,'""')}"`].join(','));
+  downloadBlob(new Blob([['Severity,Rule,Timestamp,Description',...rows].join('\n')], { type:'text/csv' }), `violations-${currentVideoId}.csv`);
+}
+function exportText() {
+  if (!currentReport) return;
+  const r = currentReport; const f = r.findings || r.violations || [];
+  const lines = [
+    'REGVISION — DPDPA 2025 COMPLIANCE REPORT','='.repeat(42),'',
+    `File:     ${r.filename || currentVideoId}`,
+    `Score:    ${Math.round(r.compliance_score||0)} / 100`,
+    `Status:   ${(r.status||'').toUpperCase()}`,
+    `Checks:   ${r.total_checks||0} total · ${r.passed_checks||0} passed · ${r.failed_checks||0} failed`,
+    `Critical: ${r.critical_violations||0}`,'',
+    `VIOLATIONS (${f.length})`,'-'.repeat(30),
+    ...f.map((v,i) => [`${i+1}. [${(v.severity||'').toUpperCase()}] ${v.rule_reference||''}`,`   ${v.description||v.title||''}`,`   Timestamp: ${v.timestamp||'N/A'}`,''].join('\n')),
+    'RECOMMENDATIONS','-'.repeat(30),
+    ...(r.recommendations||[]).map((rec,i) => `${i+1}. ${rec}`),'',
+    'Generated by RegVision · DPDPA 2025 Compliance Engine',
+  ];
+  downloadBlob(new Blob([lines.join('\n')], { type:'text/plain' }), `report-${currentVideoId}.txt`);
+}
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+function show(id) { const el = document.getElementById(id); if (el) el.classList.remove('hidden'); }
+function hide(id) { const el = document.getElementById(id); if (el) el.classList.add('hidden'); }
+
+function startOver() {
+  clearInterval(pollTimer); pollTimer = null; stopCentreFacts();
+  selectedFile=null; currentVideoId=null; currentReport=null; currentReportId=null;
+  timelineEvents=[]; seenEvents.clear(); centreFactIdx=0;
+  document.getElementById('file-input').value = '';
+  const fp = document.getElementById('file-preview');
+  fp.classList.add('hidden'); fp.classList.remove('upload-failed');
+  document.getElementById('upload-card').classList.remove('locked');
+  document.getElementById('upload-err').classList.remove('show');
+  document.getElementById('proc-top-info').classList.add('hidden');
+  document.getElementById('prog-fill').style.width='0%';
+  document.getElementById('prog-fill').classList.remove('done');
+  document.getElementById('prog-pct').textContent='0%';
+  resetStages();
+  ['centre-processing','section-timeline','section-results','section-export','rec-section','dq-alert'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.classList.add('hidden');
+  });
+  show('upload-card'); show('left-empty'); show('right-empty');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(async () => {
+    try {
+      const r = await fetch(`${API}/videos/`);
+      const d = await r.json();
+      const videos = Array.isArray(d) ? d : (d.videos||d.items||[]);
+      const active = videos.find(v => v.status==='processing'||v.status==='queued');
+      if (active) {
+        currentVideoId = active.video_id;
+        addTimelineEvent('Resumed in-progress job','done');
+        startProcessing(active.filename||active.video_id);
+      }
+    } catch(_) {}
+  }, 500);
+});
+</script>
+</body>
+</html>

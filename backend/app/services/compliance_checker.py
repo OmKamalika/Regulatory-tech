@@ -100,12 +100,18 @@ def get_report_summary(report_id: str) -> Optional[dict]:
         ).all()
 
         limitations = report.recommendations or []
+        stage_failure = any("STAGE FAILURE" in str(l) for l in limitations)
         ocr_limitation = any("OCR" in str(l) or "ocr" in str(l) for l in limitations)
         data_quality = {
             "ocr_verified": not ocr_limitation,
-            "score_reliable": not ocr_limitation,
+            "score_reliable": not stage_failure,
+            "stage_failure": stage_failure,
             "limitations": limitations,
             "warning": (
+                "Score is 0% — one or more pipeline stages (OCR, Visual, Frame Extraction) failed. "
+                "Results are incomplete and cannot be relied upon. "
+                "Fix the missing dependencies and re-process the video with force=true."
+            ) if stage_failure else (
                 "Compliance score may be understated — OCR was unavailable during processing. "
                 "Text-based PII (PAN, Aadhaar, phone numbers visible on screen) was not checked. "
                 "Re-process the video to get a verified score."

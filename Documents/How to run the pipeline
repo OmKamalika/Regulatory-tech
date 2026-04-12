@@ -234,7 +234,139 @@ View full audit trail for a compliance report:
 
 
 ══════════════════════════════════════════════════════
-SECTION 5 — TROUBLESHOOTING
+SECTION 5 — USING THE WEB UI
+══════════════════════════════════════════════════════
+
+The web UI is a single HTML file at frontend/index.html.
+Open it directly in any browser — no web server required.
+
+    File location: frontend\index.html
+    Open with:     Double-click the file, or drag it into Chrome / Edge / Firefox.
+    API must be running at http://localhost:8000 before using the UI.
+
+
+— Before you open the UI, start the backend services:
+
+    Terminal 1 — Docker infrastructure
+        .\start.ps1 docker
+
+    Terminal 2 — API server
+        .\start.ps1 api
+
+    Terminal 3 — Celery worker (processes videos in background)
+        .\start.ps1 worker
+
+
+— Step-by-step: upload and process a video via the UI
+
+    Step 1 — Start infrastructure (PowerShell from project root)
+
+        .\start.ps1 docker
+
+        Wait ~30 seconds. Confirm all containers are running:
+        docker ps   (all six should show "Up")
+
+    Step 2 — Start the API server (new terminal)
+
+        .\start.ps1 api
+
+        Wait until you see: "Application startup complete."
+
+    Step 3 — Start the Celery worker (new terminal)
+
+        .\start.ps1 worker
+
+        Wait for the startup checks table to print.
+        All items must show OK ✓  (OCR may show WARN ! — that is acceptable).
+
+    Step 4 — Open the UI
+
+        Double-click frontend\index.html in File Explorer.
+        It opens in your default browser. No web server needed.
+
+    Step 5 — Drop or browse your video
+
+        Drag a video file onto the centre upload area,
+        or click "Browse Files" to pick one from your computer.
+        Supported formats: MP4, MOV, AVI, MKV, WEBM.
+
+    Step 6 — Click "ANALYSE VIDEO"
+
+        The file uploads to the API server.
+        The upload card locks and shows "PIPELINE ACTIVE".
+        Do not refresh the page while processing is running.
+
+    Step 7 — Watch processing (takes 2–5 minutes)
+
+        Left panel  — Pipeline Log updates with timestamped events.
+        Stage chips — FRAMES → OCR → VISUAL → AUDIO light up orange
+                      while running, then turn green when done.
+        Progress bar fills to 100% as the pipeline advances.
+
+    Step 8 — Read results (right panel, appears automatically)
+
+        • Compliance score ring (0–100, colour-coded)
+        • Pass / Fail / Critical violation counts
+        • Full violation list with severity and rule references
+        • Yellow warning if OCR was unavailable (score may be incomplete)
+
+    Step 9 — Export the report
+
+        Click JSON, CSV, or TXT in the right panel to download.
+        JSON — full machine-readable report (all fields and findings)
+        CSV  — violations only (Severity, Rule, Timestamp, Description)
+        TXT  — human-readable summary with recommendations
+
+    Step 10 — To analyse another video
+
+        Click "Remove" on the locked file card.
+        The UI resets. Repeat from Step 5.
+
+
+— If something goes wrong:
+
+    Upload fails (red border on file card)
+        → API server not running — go back to Step 2.
+        → Celery worker not started — go back to Step 3.
+        → Error message on the card will tell you the exact cause.
+
+    Stage chips stop updating after ~5 minutes
+        → Open http://localhost:5555 (Flower) to inspect the task.
+        → Check Active / Reserved tabs for your task.
+
+    Score is 0% with a stage failure warning
+        → Check the worker terminal for the specific error message.
+        → Fix the issue, then re-upload with Remove → re-drop → Analyse.
+
+
+— UI layout overview:
+
+    Left panel   — Pipeline Log: timestamped event stream for the active job.
+    Centre panel — Upload card, stage chips, and progress bar.
+    Right panel  — Compliance results and export buttons (shown after analysis).
+
+
+— Important notes:
+
+    • The UI communicates directly with http://localhost:8000.
+      If the API is not running, uploads will fail immediately.
+
+    • If upload fails (red border on the file card): check that the API server
+      is running and that the Celery worker is started (.\start.ps1 worker).
+      The error message on the card tells you what went wrong.
+
+    • If the pipeline stalls (stage chips don't progress after ~5 minutes):
+      open http://localhost:5555 (Flower) to inspect the task status.
+
+    • OCR warning in results: if the right panel shows "OCR was unavailable",
+      text-based PII (Aadhaar, PAN, phone numbers on screen) was not checked.
+      Fix OCR (see Section 5 — Troubleshooting) and re-upload the video.
+
+    • The UI works from file:// — you do not need Node.js or a local web server.
+
+
+══════════════════════════════════════════════════════
+SECTION 6 — TROUBLESHOOTING
 ══════════════════════════════════════════════════════
 
 "Connection refused" on port 8000
@@ -275,3 +407,93 @@ Task stuck in Flower / never completes
 "video_id already exists" error on upload
     → Video was already uploaded. Either use a different video or re-process:
     Body = '{"video_path": "...", "force": true}'
+
+
+══════════════════════════════════════════════════════
+SECTION 7 — SYSTEM DOCTOR (pre-flight health check)
+══════════════════════════════════════════════════════
+
+Run the doctor script before starting the system to catch every known failure
+mode before it silently breaks a video mid-pipeline.
+
+Location: backend/doctor.py
+
+
+— Quick check (connectivity only, no model loading, ~5 seconds):
+
+    cd backend
+    python doctor.py --quick --fix
+
+
+— Full check (includes all ML model loading, ~2 minutes):
+
+    cd backend
+    python doctor.py --fix
+
+
+The --fix flag auto-resolves what it can:
+    • Creates missing MinIO buckets (videos, frames, documents)
+    • Creates the upload temp directory if missing
+
+
+— What the doctor checks:
+
+    [Config]
+      Security keys — warns if placeholder SECRET_KEY / JWT_SECRET_KEY still set
+      API_KEY       — warns if unauthenticated (OK for local dev)
+
+    [Services]
+      PostgreSQL    — connection reachable
+      Redis         — Celery broker reachable
+      Weaviate      — ready + both collections (VideoContent, Guidelines) exist
+      MinIO         — connection + all 3 required buckets exist
+
+    [DB Schema]
+      FrameAnalysis       — live write test (INSERT + ROLLBACK)
+                            catches NOT NULL violations before any video is processed
+      TranscriptionSegment — live write test
+      ComplianceReport    — live write test
+      NumPy→float cast    — verifies np.float64 is safely cast before DB insert
+
+    [Tools]
+      FFmpeg        — found on PATH
+
+    [File System]
+      Upload directory — exists and writable
+
+    [Data]
+      DPDPA Guidelines — at least 1 active rule loaded in DB
+
+    [ML Models]  (skipped with --quick)
+      YOLO          — model loads without error
+      OCR           — engine can read text (not in fallback mode)
+      Whisper       — model loads without error
+      Embeddings    — model loads, dimension correct
+
+
+— How to read the output:
+
+    OK     ✓  — check passed
+    WARN   !  — non-blocking issue (system works but may have reduced coverage)
+    FAIL   ✗  — blocking issue (fix before starting worker)
+    FIXED  ↻  — issue was found and automatically resolved
+
+    If any FAIL items appear, the doctor prints the exact command to fix each one.
+
+
+— Recommended workflow before every session:
+
+    Step 1 — Start Docker:
+        .\start.ps1 docker
+
+    Step 2 — Run doctor:
+        cd backend
+        python doctor.py --quick --fix
+
+    Step 3 — If all green, start services:
+        .\start.ps1 api
+        .\start.ps1 worker
+
+    If doctor shows FAIL items, fix them before starting the worker.
+    Running the worker with a broken schema wastes processing time and produces
+    0% compliance scores with no obvious error message.

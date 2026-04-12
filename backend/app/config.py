@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Regtech Video Compliance"
     DEBUG: bool = False  # Must be explicitly set True in dev; never True in prod
     LOG_LEVEL: str = "INFO"
-    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://localhost:8080,null"
 
     # API Authentication
     # Set a long random string in .env — when empty, auth is skipped (local dev only).
@@ -74,12 +74,12 @@ class Settings(BaseSettings):
     ENABLE_SCENE_DETECTION: bool = True
     MAX_CONCURRENT_JOBS: int = 3
 
-    # Frame Preprocessing (improves OCR text detection on poor-quality frames)
-    # Set ENABLE_FRAME_PREPROCESSING=False in .env to disable entirely.
-    ENABLE_FRAME_PREPROCESSING: bool = True
-    PREPROCESS_BLUR_THRESHOLD: float = 50.0   # Laplacian variance below this = skip frame
-    PREPROCESS_MIN_BRIGHTNESS: int = 20       # Mean pixel value below this = too dark, skip
-    PREPROCESS_MAX_BRIGHTNESS: int = 235      # Mean pixel value above this = overexposed, skip
+    # Frame Preprocessing — disabled to ensure no frames are skipped for OCR/PII detection.
+    # All frames are processed regardless of brightness or blur quality.
+    ENABLE_FRAME_PREPROCESSING: bool = False
+    PREPROCESS_BLUR_THRESHOLD: float = 0.0    # unused (preprocessing disabled)
+    PREPROCESS_MIN_BRIGHTNESS: int = 0        # unused (preprocessing disabled)
+    PREPROCESS_MAX_BRIGHTNESS: int = 255      # unused (preprocessing disabled)
 
     # Security
     SECRET_KEY: str = "your-secret-key-change-in-production"
