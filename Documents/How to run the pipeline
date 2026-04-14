@@ -32,6 +32,21 @@ SECTION 2 — FIRST-TIME SETUP (run once after cloning)
 
 All commands run from the project root folder in PowerShell.
 
+NOTE FOR PARTNERS / NEW TEAM MEMBERS
+──────────────────────────────────────────────────────────────────────────
+The Docker containers only run the INFRASTRUCTURE (database, cache, vector
+store, object storage, Ollama, Flower monitoring). The Python backend app
+— the API server and the Celery worker — runs on YOUR machine, not inside
+Docker.
+
+This means you must complete EVERY step in this section before the system
+will work, even if the Docker containers are already running on another
+machine or were shared with you pre-started.
+
+After completing this section once, use SECTION 3 — DAILY USAGE for every
+subsequent session.
+──────────────────────────────────────────────────────────────────────────
+
 Step 1 — Start Docker containers
 
     .\start.ps1 docker
