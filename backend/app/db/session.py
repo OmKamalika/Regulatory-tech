@@ -40,6 +40,8 @@ def get_db() -> Generator[Session, None, None]:
 
 def create_tables():
     """Create all database tables"""
+    # Ensure all model modules are imported so metadata is populated.
+    import app.models  # noqa: F401
     Base.metadata.create_all(bind=engine)
 
 

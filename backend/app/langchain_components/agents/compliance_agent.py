@@ -11,7 +11,7 @@ Phase 2 (async, via Celery): LLM writes executive_summary after Phase 1 complete
 """
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 
@@ -454,7 +454,7 @@ def check_metadata_rules(state: ComplianceState) -> ComplianceState:
             if video:
                 # Check data retention — DPDPA requires CCTV max 90 days
                 if hasattr(video, "created_at") and video.created_at:
-                    age_days = (datetime.utcnow() - video.created_at).days
+                    age_days = (datetime.now(timezone.utc) - video.created_at).days
                     if age_days > 90:
                         rules = get_rules_by_check_type("data_retention")
                         for rule in rules:
@@ -791,6 +791,7 @@ def save_to_db(state: ComplianceState) -> ComplianceState:
                 "compliant": ComplianceStatus.COMPLIANT,
                 "non_compliant": ComplianceStatus.NON_COMPLIANT,
                 "partial": ComplianceStatus.PARTIAL,
+                "incomplete": ComplianceStatus.PENDING_REVIEW,  # stage failure — not enough data
             }
             report.status = status_map.get(report_data.get("status", ""), ComplianceStatus.PENDING_REVIEW)
             report.compliance_score = report_data.get("compliance_score")

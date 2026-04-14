@@ -2,11 +2,28 @@
 Embedding service using sentence-transformers for local embedding generation.
 Converts text to vector embeddings for semantic search.
 """
-from sentence_transformers import SentenceTransformer
 import logging
+import warnings
 from typing import List, Union
+
 import numpy as np
 from dataclasses import dataclass
+
+# Suppress two known-harmless warnings that fire on every worker startup:
+#
+# 1. "embeddings.position_ids | UNEXPECTED"
+#    all-mpnet-base-v2 was serialised when transformers still stored position_ids
+#    as a buffer. Current transformers computes it dynamically; the leftover key
+#    in the checkpoint is logged as unexpected but is silently ignored.
+#
+# 2. HTTP 404 for processor_config.json
+#    Newer sentence_transformers probes HF Hub for a processor config (needed only
+#    by multimodal models). all-mpnet-base-v2 predates this and has no such file.
+#    The 404 is expected; loading continues normally.
+import transformers.utils.logging as _hf_logging
+_hf_logging.set_verbosity_error()
+
+from sentence_transformers import SentenceTransformer  # noqa: E402 (import after logging config)
 
 from app.config import settings
 

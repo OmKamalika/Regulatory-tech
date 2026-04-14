@@ -261,11 +261,22 @@ def get_video_status(video_id: str):
         ).scalar() or 0
 
         ocr_coverage = round(frames_with_text / frames_total, 2) if frames_total else 0
+
+        # After auto-purge, frame_analyses rows are deleted (DPDPA data minimisation).
+        # frames_total from the table becomes 0, making OCR look "pending" even though
+        # it ran successfully. Use visual_analysis_completed (survives purge) as the
+        # authoritative signal when the table is empty but the video is done.
+        data_purged = frames_total == 0 and (video.frames_processed or 0) > 0
         ocr_stage_status = (
             "completed" if ocr_coverage > 0.1 else
+            "completed" if data_purged and video.visual_analysis_completed else
             "degraded" if frames_total > 0 else
             "pending"
         )
+
+        # frames_total: prefer the count stored on the video record (survives purge).
+        # Fall back to live table count only when the stored value is missing.
+        frames_total_display = video.frames_processed if video.frames_processed else frames_total
 
         response = {
             "video_id": video_id,
@@ -279,7 +290,7 @@ def get_video_status(video_id: str):
             "pipeline_stages": {
                 "frame_extraction": {
                     "status": "completed" if video.visual_analysis_completed else "pending",
-                    "frames_total": frames_total,
+                    "frames_total": frames_total_display,
                     "persons_detected_in": frames_with_persons,
                 },
                 "ocr": {

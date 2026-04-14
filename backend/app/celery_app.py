@@ -108,65 +108,44 @@ def run_startup_checks(**kwargs):
     except Exception as e:
         warn("OCR", f"Failed to load: {e}")
 
-    # ── 6. DB schema write test — FrameAnalysis ────────────────────────────
-    # Catches column mismatches (e.g. NOT NULL without default) before any
-    # real video is processed. Inserts a sentinel row then immediately deletes it.
+    # ── 6. DB schema check — FrameAnalysis ────────────────────────────────
+    # Uses SQLAlchemy introspection instead of a test INSERT to avoid
+    # triggering the video_id FK constraint with a non-existent UUID.
     try:
-        import uuid as _uuid
-        from app.db.session import SessionLocal as _SL
-        from app.models.frame_analysis import FrameAnalysis as _FA
-        _db = _SL()
-        _sentinel_id = str(_uuid.uuid4())
-        _row = _FA(
-            id=_sentinel_id,
-            video_id="00000000-0000-0000-0000-000000000000",  # non-existent FK — test insert only
-            frame_number=0,
-            timestamp=0.0,
-            minio_path="",
-            objects_detected=[],
-            persons_detected=0,
-            ocr_text="",
-            visual_analysis_completed=False,
-            ocr_completed=False,
-            vectorized=False,
-        )
-        try:
-            _db.add(_row)
-            _db.flush()          # send INSERT without committing
-            ok("DB schema (FrameAnalysis)", "write test passed")
-        except Exception as _e:
-            fail("DB schema (FrameAnalysis)", f"Insert failed: {_e}  →  Run: alembic upgrade head")
-        finally:
-            _db.rollback()       # always roll back — sentinel row must not persist
-            _db.close()
+        from sqlalchemy import inspect as _inspect
+        from app.db.session import engine as _engine
+        _inspector = _inspect(_engine)
+        _fa_cols = {c["name"] for c in _inspector.get_columns("frame_analyses")}
+        _fa_required = {
+            "id", "video_id", "frame_number", "timestamp", "minio_path",
+            "objects_detected", "faces_detected", "persons_detected",
+            "ocr_text", "visual_analysis_completed", "ocr_completed", "vectorized",
+        }
+        _missing = _fa_required - _fa_cols
+        if _missing:
+            fail("DB schema (FrameAnalysis)", f"Missing columns: {_missing}  →  Run: alembic upgrade head")
+        else:
+            ok("DB schema (FrameAnalysis)", "schema OK")
     except Exception as e:
-        warn("DB schema (FrameAnalysis)", f"Could not run write test: {e}")
+        fail("DB schema (FrameAnalysis)", f"Could not inspect table: {e}  →  Run: alembic upgrade head")
 
-    # ── 7. DB schema write test — TranscriptionSegment ────────────────────
+    # ── 7. DB schema check — TranscriptionSegment ─────────────────────────
     try:
-        import uuid as _uuid2
-        from app.db.session import SessionLocal as _SL2
-        from app.models.transcription import TranscriptionSegment as _TS
-        _db2 = _SL2()
-        _ts_row = _TS(
-            id=str(_uuid2.uuid4()),
-            video_id="00000000-0000-0000-0000-000000000000",
-            start_time=float(0.0),   # verify Python float (not np.float64) is accepted
-            end_time=float(1.0),
-            text="__startup_check__",
-            vectorized=False,
-        )
-        try:
-            _db2.add(_ts_row)
-            _db2.flush()
-            ok("DB schema (Transcription)", "write test passed")
-        except Exception as _e:
-            fail("DB schema (Transcription)", f"Insert failed: {_e}  →  Run: alembic upgrade head")
-        finally:
-            _db2.rollback()
-            _db2.close()
+        from sqlalchemy import inspect as _inspect2
+        from app.db.session import engine as _engine2
+        _inspector2 = _inspect2(_engine2)
+        _ts_cols = {c["name"] for c in _inspector2.get_columns("transcription_segments")}
+        _ts_required = {
+            "id", "video_id", "start_time", "end_time", "text",
+            "confidence", "weaviate_id", "vectorized",
+        }
+        _missing2 = _ts_required - _ts_cols
+        if _missing2:
+            fail("DB schema (Transcription)", f"Missing columns: {_missing2}  →  Run: alembic upgrade head")
+        else:
+            ok("DB schema (Transcription)", "schema OK")
     except Exception as e:
-        warn("DB schema (Transcription)", f"Could not run write test: {e}")
+        fail("DB schema (Transcription)", f"Could not inspect table: {e}  →  Run: alembic upgrade head")
 
     # ── Print results table ────────────────────────────────────────────────
     width = 62

@@ -114,7 +114,11 @@
       "WebFetch(domain:fontsinuse.com)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:www.cdnfonts.com)",
-      "Bash(./../.venv/Scripts/python.exe -c \":*)"
+      "Bash(./../.venv/Scripts/python.exe -c \":*)",
+      "Bash(powershell.exe -Command \"& 'C:\\\\Users\\\\kamal\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python313\\\\Scripts\\\\pip.exe' install sqlalchemy psycopg2-binary 2>&1\")",
+      "Bash(powershell.exe -Command \"& 'C:\\\\Users\\\\kamal\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python313\\\\Scripts\\\\pip.exe' install -r 'C:\\\\Users\\\\kamal\\\\Regulatory-tech\\\\backend\\\\requirements.txt' 2>&1 | Select-String 'Successfully installed|ERROR|error'\")",
+      "Bash(powershell.exe -Command \"& 'C:\\\\Users\\\\kamal\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python313\\\\Scripts\\\\pip.exe' install fastapi uvicorn[standard] sqlalchemy alembic psycopg2-binary celery redis minio pydantic pydantic-settings python-dotenv httpx python-multipart websockets 2>&1 | Select-String 'Successfully|ERROR|error'\")",
+      "Bash(powershell.exe -Command \"& 'C:\\\\Users\\\\kamal\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python313\\\\Scripts\\\\pip.exe' install fastapi 'uvicorn[standard]' sqlalchemy alembic psycopg2-binary celery redis minio pydantic pydantic-settings python-dotenv httpx python-multipart websockets\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\mailt\\.claude\\plans",

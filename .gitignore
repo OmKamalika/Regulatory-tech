@@ -31,6 +31,8 @@ ENV/
 *.onnx
 models/
 checkpoints/
+!backend/app/models/
+!backend/app/models/*.py
 
 # IDEs
 .vscode/

@@ -1064,9 +1064,13 @@ async function pollStatus(filename) {
     if (tr.status === 'completed')  addTimelineEvent('Audio transcription complete', 'done');
     if (status === 'completed') {
       clearInterval(pollTimer); pollTimer = null; stopCentreFacts();
-      addTimelineEvent('Pipeline complete — compliance check...', 'active');
+      // The pipeline already ran the compliance check internally and auto-purged
+      // raw frame data. Do NOT call POST /compliance/check again — it would run
+      // on an empty DB and produce a garbage 0% score.
+      // Instead, read the report the pipeline already saved.
+      addTimelineEvent('Pipeline complete — loading report...', 'active');
       renderTimeline();
-      await runComplianceCheck(filename);
+      await fetchExistingReport(filename);
     } else if (status === 'failed') {
       clearInterval(pollTimer); pollTimer = null; stopCentreFacts();
       addTimelineEvent('Pipeline FAILED — check worker logs', 'done');
@@ -1113,15 +1117,19 @@ function renderTimeline() {
     </div>`).join('');
 }
 
-async function runComplianceCheck(filename) {
+async function fetchExistingReport(filename) {
+  // The pipeline runs compliance check internally. Fetch the report it already saved.
   try {
-    const r = await fetch(`${API}/compliance/check/${currentVideoId}`, { method: 'POST' });
-    const d = await r.json();
-    currentReportId = d.report_id;
-    addTimelineEvent('Compliance check complete', 'done'); renderTimeline();
     const rr = await fetch(`${API}/compliance/report/${currentVideoId}`);
-    if (rr.ok) { currentReport = await rr.json(); renderResults(currentReport, filename); }
-  } catch (e) { addTimelineEvent('Compliance check failed: ' + e.message, 'done'); renderTimeline(); }
+    if (rr.ok) {
+      currentReport = await rr.json();
+      currentReportId = currentReport.report_id;
+      addTimelineEvent('Compliance report loaded', 'done'); renderTimeline();
+      renderResults(currentReport, filename);
+    } else {
+      addTimelineEvent('No compliance report found', 'done'); renderTimeline();
+    }
+  } catch (e) { addTimelineEvent('Failed to load report: ' + e.message, 'done'); renderTimeline(); }
 }
 
 function renderResults(data, filename) {

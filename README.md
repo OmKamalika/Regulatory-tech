@@ -1,6 +1,6 @@
 # Regtech Video Compliance Checker
 
-An AI-powered web application for automatically checking video compliance against regulatory guidelines using **100% open source models**.
+An AI-powered web application for automatically checking app compliance against regulatory guidelines, via a video app demo, using **100% open source models**.
 
 ## Features
 

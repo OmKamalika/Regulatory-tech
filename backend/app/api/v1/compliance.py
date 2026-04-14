@@ -43,11 +43,33 @@ async def run_compliance_check(
     db = SessionLocal()
     try:
         from app.models.video import Video
+        from app.models.frame_analysis import FrameAnalysis
         video = db.query(Video).filter(Video.id == video_id).first()
         if not video:
             raise HTTPException(status_code=404, detail=f"Video {video_id} not found")
+
+        # Guard: if raw frame data is already purged, re-running produces a
+        # stage-failure 0% report that shadows the real result. Return the existing
+        # report instead of creating a new empty one.
+        frame_count = db.query(FrameAnalysis).filter(FrameAnalysis.video_id == video_id).count()
+        existing_report = (
+            db.query(ComplianceReport)
+            .filter(ComplianceReport.video_id == video_id)
+            .order_by(ComplianceReport.created_at.asc())
+            .first()
+        )
     finally:
         db.close()
+
+    if frame_count == 0 and existing_report is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Raw frame data for video {video_id} has already been purged (DPDPA data minimisation). "
+                f"A compliance report already exists: report_id={existing_report.id}. "
+                f"Use GET /report/{video_id} to retrieve it."
+            ),
+        )
 
     result = check_video_compliance(video_id=video_id, use_llm=use_llm)
 

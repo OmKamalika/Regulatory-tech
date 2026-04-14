@@ -6,6 +6,23 @@
 
 $env:PYTHONPATH = "$PSScriptRoot\backend"
 
+# Resolve the pip that belongs to the same Python uvicorn uses
+$uvicornPath = (Get-Command uvicorn -ErrorAction SilentlyContinue).Source
+if ($uvicornPath) {
+    $pythonDir = Split-Path (Split-Path $uvicornPath)
+    $pip313 = Join-Path $pythonDir "Scripts\pip.exe"
+} else {
+    $pip313 = "pip"
+}
+
+# Install backend dependencies if not already installed
+$flagFile = "$PSScriptRoot\.deps_installed"
+if (-not (Test-Path $flagFile)) {
+    Write-Host "Installing backend dependencies using $pip313 ..."
+    & $pip313 install -r "$PSScriptRoot\backend\requirements.txt"
+    New-Item -ItemType File -Path $flagFile | Out-Null
+}
+
 switch ($args[0]) {
     "api" {
         Write-Host "Starting API server..."

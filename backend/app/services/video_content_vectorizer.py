@@ -101,6 +101,14 @@ class VideoContentVectorizer:
                 stats["frames_processed"] = len(frames)
                 logger.info(f"Extracted {len(frames)} frames")
 
+                if len(frames) == 0:
+                    raise ValueError(
+                        f"Frame extraction returned 0 frames for {video_path}. "
+                        "The video file may use an unsupported codec (re-encode to H.264), "
+                        "be corrupt, or have no decodable video stream. "
+                        "Run: ffprobe -v error -show_entries stream=codec_name,codec_type <file>"
+                    )
+
                 # Step 2: Extract and transcribe audio (skipped for video-only MP4s)
                 transcription_segments = []
                 if process_audio:
